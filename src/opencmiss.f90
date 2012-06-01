@@ -3440,6 +3440,12 @@ MODULE OPENCMISS
     MODULE PROCEDURE CMISSField_VariableTypesSetObj
   END INTERFACE !CMISSField_VariableTypesSet
 
+  !>Gets the volume of a given element inside from a geometric field.
+  INTERFACE CMISSField_GeometricParametersElementVolumeGet
+    MODULE PROCEDURE CMISSField_GeometricParametersElementVolumeGetNumber
+    MODULE PROCEDURE CMISSField_GeometricParametersElementVolumeGetObj
+  END INTERFACE !CMISSField_GeometricParametersElementVolumeGet
+
 
   PUBLIC CMISS_FIELD_DEPENDENT_TYPE,CMISS_FIELD_INDEPENDENT_TYPE
 
@@ -3516,6 +3522,8 @@ MODULE OPENCMISS
   PUBLIC CMISSField_DimensionGet,CMISSField_DimensionSet
 
   PUBLIC CMISSField_GeometricFieldGet,CMISSField_GeometricFieldSet
+  
+  PUBLIC CMISSField_GeometricParametersElementVolumeGet
 
   PUBLIC CMISSField_LabelGet,CMISSField_LabelSet
 
@@ -4391,6 +4399,18 @@ MODULE OPENCMISS
     MODULE PROCEDURE CMISSDecomposition_NodeDomainGetObj
   END INTERFACE !CMISSDecomposition_ElementDomainGet
 
+    !>Returns the number of elements surrounding a node in a decomposition of a mesh.
+  INTERFACE CMISSDecomposition_NodeNumberSurroundingElementsGet
+    MODULE PROCEDURE CMISSDecomposition_NodeNumberSurroundingElementsGetNumber
+    MODULE PROCEDURE CMISSDecomposition_NodeNumberSurroundingElementsGetObj
+  END INTERFACE !CMISSDecomposition_NodeNumberSurroundingElementsGetGet
+
+    !>Returns the surrounding elements for a given node in a decomposition of a mesh.
+  INTERFACE CMISSDecomposition_NodeSurroundingElementsGet
+    MODULE PROCEDURE CMISSDecomposition_NodeSurroundingElementsGetNumber
+    MODULE PROCEDURE CMISSDecomposition_NodeSurroundingElementsGetObj
+  END INTERFACE !CMISSDecomposition_ElementDomainGet
+
   PUBLIC CMISS_DECOMPOSITION_ALL_TYPE,CMISS_DECOMPOSITION_CALCULATED_TYPE,CMISS_DECOMPOSITION_USER_DEFINED_TYPE
 
   PUBLIC CMISSDecomposition_CreateFinish,CMISSDecomposition_CreateStart
@@ -4427,7 +4447,10 @@ MODULE OPENCMISS
 
   PUBLIC CMISSMesh_NodeExists,CMISSMesh_ElementExists
 
-  PUBLIC CMISSDecomposition_NodeDomainGet,CMISSMeshElements_UserNodeVersionSet, CMISSMeshElements_LocalElementNodeVersionSet
+  PUBLIC CMISSDecomposition_NodeDomainGet,CMISSDecomposition_NodeNumberSurroundingElementsGet, &
+    & CMISSDecomposition_NodeSurroundingElementsGet
+
+  PUBLIC CMISSMeshElements_UserNodeVersionSet, CMISSMeshElements_LocalElementNodeVersionSet
 
   PUBLIC CMISSMesh_SurroundingElementsCalculateSet
 
@@ -24455,6 +24478,80 @@ CONTAINS
   !================================================================================================================================
   !
 
+  !>Returns the volume of an element in the geometric field identified by an object.
+  SUBROUTINE CMISSField_GeometricParametersElementVolumeGetObj(field,element_number,element_volume,err)
+
+    !Argument variables
+    TYPE(CMISSFieldType), INTENT(IN) :: field !<The field with the geometric parameters from which to get the volume of an element.
+    INTEGER(INTG), INTENT(IN) :: element_number !<The number of the element to access the volume for
+    REAL(DP), INTENT(OUT) :: element_volume !<On return, the element volume.
+    INTEGER(INTG), INTENT(OUT) :: err !<The error code.
+    !Local variables
+
+    CALL ENTERS("CMISSField_GeometricParametersElementVolumeGetObj",err,error,*999)
+
+    CALL FIELD_GEOMETRIC_PARAMETERS_ELEMENT_VOLUME_GET(field%FIELD,element_number,element_volume,err,error,*999)
+
+    CALL EXITS("CMISSField_GeometricParametersElementVolumeGetObj")
+    RETURN
+999 CALL ERRORS("CMISSField_GeometricParametersElementVolumeGetObj",err,error)
+    CALL EXITS("CMISSField_GeometricParametersElementVolumeGetObj")
+    CALL CMISS_HANDLE_ERROR(err,error)
+    RETURN
+
+  END SUBROUTINE CMISSField_GeometricParametersElementVolumeGetObj
+
+  !
+  !================================================================================================================================
+  !
+
+  !>Returns the volume of an element in the geometric field identified by a user number.
+  SUBROUTINE CMISSField_GeometricParametersElementVolumeGetNumber(regionUserNumber,fieldUserNumber, &
+    & element_number,element_volume,err)
+
+    !Argument variables
+    INTEGER(INTG), INTENT(IN) :: regionUserNumber !<The user number for the region containing the field
+    INTEGER(INTG), INTENT(IN) :: fieldUserNumber !<The field with the geometric parameters from which to get the volume of an element.
+    INTEGER(INTG), INTENT(IN) :: element_number !<The number of the element to access the volume for
+    REAL(DP), INTENT(OUT) :: element_volume !<On return, the element volume.
+    INTEGER(INTG), INTENT(OUT) :: err !<The error code.
+    !Local variables
+    TYPE(FIELD_TYPE), POINTER :: FIELD
+    TYPE(REGION_TYPE), POINTER :: REGION
+    TYPE(VARYING_STRING) :: LOCAL_ERROR
+
+
+    CALL ENTERS("CMISSField_GeometricParametersElementVolumeGetNumber",err,error,*999)
+
+    NULLIFY(REGION)
+    NULLIFY(FIELD)
+    CALL REGION_USER_NUMBER_FIND(regionUserNumber,REGION,err,error,*999)
+    IF(ASSOCIATED(REGION)) THEN
+      CALL FIELD_USER_NUMBER_FIND(fieldUserNumber,REGION,FIELD,err,error,*999)
+      IF(ASSOCIATED(FIELD)) THEN
+        CALL FIELD_GEOMETRIC_PARAMETERS_ELEMENT_VOLUME_GET(FIELD,element_number,element_volume,err,error,*999)
+      ELSE
+        LOCAL_ERROR="A field with an user number of "//TRIM(NUMBER_TO_VSTRING(fieldUserNumber,"*",err,error))// &
+          & " does not exist on region number "//TRIM(NUMBER_TO_VSTRING(regionUserNumber,"*",err,error))//"."
+        CALL FLAG_ERROR(LOCAL_ERROR,err,error,*999)
+      END IF
+    ELSE
+      LOCAL_ERROR="A region with an user number of "//TRIM(NUMBER_TO_VSTRING(regionUserNumber,"*",err,error))//" does not exist."
+      CALL FLAG_ERROR(LOCAL_ERROR,err,error,*999)
+    END IF
+
+    CALL EXITS("CMISSField_GeometricParametersElementVolumeGetNumber")
+    RETURN
+999 CALL ERRORS("CMISSField_GeometricParametersElementVolumeGetNumber",err,error)
+    CALL EXITS("CMISSField_GeometricParametersElementVolumeGetNumber")
+    CALL CMISS_HANDLE_ERROR(err,error)
+    RETURN
+
+  END SUBROUTINE CMISSField_GeometricParametersElementVolumeGetNumber
+
+  !
+  !================================================================================================================================
+  !
   !>Returns the character string label for a field identified by a user number.
   SUBROUTINE CMISSField_LabelGetCNumber(regionUserNumber,fieldUserNumber,label,err)
 
@@ -35884,6 +35981,186 @@ CONTAINS
   !================================================================================================================================
   !
 
+  !>Returns the number of surround elements for a given node in a decomposition identified by a user number.
+  SUBROUTINE CMISSDecomposition_NodeNumberSurroundingElementsGetNumber(regionUserNumber,meshUserNumber,decompositionUserNumber, &
+    & nodeUserNumber,meshComponentNumber,number_surrounding_elements,err)
+
+    !Argument variables
+    INTEGER(INTG), INTENT(IN) :: regionUserNumber !<The user number of the region containing the mesh to get the node surrounding elements for.
+    INTEGER(INTG), INTENT(IN) :: meshUserNumber !<The user number of the mesh to get the node surrounding elements for.
+    INTEGER(INTG), INTENT(IN) :: decompositionUserNumber !<The user number of the decomposition to get the node surrounding elements for.
+    INTEGER(INTG), INTENT(IN) :: nodeUserNumber !<The user number of the node to get the surrounding elements for.
+    INTEGER(INTG), INTENT(IN) :: meshComponentNumber !<The user number of the mesh component to get the surrounding elements for.
+    INTEGER(INTG), INTENT(OUT) :: number_surrounding_elements !<On return, the number of elements surrounding the node.
+    INTEGER(INTG), INTENT(OUT) :: err !<The error code.
+    !Local variables
+    TYPE(DECOMPOSITION_TYPE), POINTER :: DECOMPOSITION
+    TYPE(MESH_TYPE), POINTER :: MESH
+    TYPE(REGION_TYPE), POINTER :: REGION
+    TYPE(VARYING_STRING) :: LOCAL_ERROR
+
+    CALL ENTERS("CMISSDecomposition_NodeNumberSurroundingElementsGetNumber",err,error,*999)
+
+    NULLIFY(REGION)
+    NULLIFY(MESH)
+    NULLIFY(DECOMPOSITION)
+    CALL REGION_USER_NUMBER_FIND(regionUserNumber,REGION,err,error,*999)
+    IF(ASSOCIATED(REGION)) THEN
+      CALL MESH_USER_NUMBER_FIND(meshUserNumber,REGION,MESH,err,error,*999)
+      IF(ASSOCIATED(MESH)) THEN
+        CALL DECOMPOSITION_USER_NUMBER_FIND(decompositionUserNumber,MESH,DECOMPOSITION,err,error,*999)
+        IF(ASSOCIATED(DECOMPOSITION)) THEN
+          CALL DECOMPOSITION_NODE_NUMBER_SURROUNDING_ELEMENTS_GET(DECOMPOSITION,nodeUserNumber,meshComponentNumber, &
+            & number_surrounding_elements,ERR,ERROR,*999)
+        ELSE
+          LOCAL_ERROR="A decomposition with an user number of "//TRIM(NUMBER_TO_VSTRING(decompositionUserNumber,"*",err,error))// &
+            & " does not exist on the mesh with an user number of "//TRIM(NUMBER_TO_VSTRING(meshUserNumber,"*",err,error))//"."
+          CALL FLAG_ERROR(LOCAL_ERROR,err,error,*999)
+        END IF
+      ELSE
+        LOCAL_ERROR="A mesh with an user number of "//TRIM(NUMBER_TO_VSTRING(meshUserNumber,"*",err,error))// &
+          & " does not exist on the region with an user number of "//TRIM(NUMBER_TO_VSTRING(regionUserNumber,"*",err,error))//"."
+        CALL FLAG_ERROR(LOCAL_ERROR,err,error,*999)
+      END IF
+    ELSE
+      LOCAL_ERROR="A region with an user number of "//TRIM(NUMBER_TO_VSTRING(regionUserNumber,"*",err,error))// &
+        & " does not exist."
+      CALL FLAG_ERROR(LOCAL_ERROR,err,error,*999)
+    END IF
+
+    CALL EXITS("CMISSDecomposition_NodeNumberSurroundingElementsGetNumber")
+    RETURN
+999 CALL ERRORS("CMISSDecomposition_NodeNumberSurroundingElementsGetNumber",err,error)
+    CALL EXITS("CMISSDecomposition_NodeNumberSurroundingElementsGetNumber")
+    CALL CMISS_HANDLE_ERROR(err,error)
+    RETURN
+
+  END SUBROUTINE CMISSDecomposition_NodeNumberSurroundingElementsGetNumber
+
+  !
+  !================================================================================================================================
+  !
+
+  !>Returns the domain for a given node in a decomposition identified by an object. \todo Maybe swap Node and MeshComponent?
+  SUBROUTINE CMISSDecomposition_NodeNumberSurroundingElementsGetObj(decomposition,nodeUserNumber, &
+    & meshComponentNumber,number_surrounding_elements,err)
+
+    !Argument variables
+    TYPE(CMISSDecompositionType), INTENT(IN) :: decomposition !<The decomposition to get the surrounding elements for.
+    INTEGER(INTG), INTENT(IN) :: nodeUserNumber !<The user number of the noder.
+    INTEGER(INTG), INTENT(IN) :: meshComponentNumber !<The user number of the mesh component for the node.
+    INTEGER(INTG), INTENT(OUT) :: number_surrounding_elements !<On return, the number of surrounding elements for thenode
+    INTEGER(INTG), INTENT(OUT) :: err !<The error code.
+    !Local variables
+
+    CALL ENTERS("CMISSDecomposition_NodeNumberSurroundingElementsGetObj",err,error,*999)
+
+    CALL DECOMPOSITION_NODE_NUMBER_SURROUNDING_ELEMENTS_GET(decomposition%DECOMPOSITION,nodeUserNumber,meshComponentNumber, &
+    & number_surrounding_elements,ERR,ERROR,*999)
+
+    CALL EXITS("CMISSDecomposition_NodeNumberSurroundingElementsGetObj")
+    RETURN
+999 CALL ERRORS("CMISSDecomposition_NodeNumberSurroundingElementsGetObj",err,error)
+    CALL EXITS("CMISSDecomposition_NodeNumberSurroundingElementsGetObj")
+    CALL CMISS_HANDLE_ERROR(err,error)
+    RETURN
+
+  END SUBROUTINE CMISSDecomposition_NodeNumberSurroundingElementsGetObj
+
+
+  !
+  !================================================================================================================================
+  !
+
+  !>Returns the surround elements for a given node in a decomposition identified by a user number.
+  SUBROUTINE CMISSDecomposition_NodeSurroundingElementsGetNumber(regionUserNumber,meshUserNumber,decompositionUserNumber, &
+    & nodeUserNumber,meshComponentNumber,SURROUNDING_ELEMENTS,err)
+
+    !Argument variables
+    INTEGER(INTG), INTENT(IN) :: regionUserNumber !<The user number of the region containing the mesh to get the node surrounding elements for.
+    INTEGER(INTG), INTENT(IN) :: meshUserNumber !<The user number of the mesh to get the node surrounding elements for.
+    INTEGER(INTG), INTENT(IN) :: decompositionUserNumber !<The user number of the decomposition to get the node surrounding elements for.
+    INTEGER(INTG), INTENT(IN) :: nodeUserNumber !<The user number of the node to get the surrounding elements for.
+    INTEGER(INTG), INTENT(IN) :: meshComponentNumber !<The user number of the mesh component to get the surrounding elements for.
+    INTEGER(INTG), POINTER, INTENT(OUT) :: SURROUNDING_ELEMENTS(:) !<On return, the elements surrounding the node.
+    INTEGER(INTG), INTENT(OUT) :: err !<The error code.
+    !Local variables
+    TYPE(DECOMPOSITION_TYPE), POINTER :: DECOMPOSITION
+    TYPE(MESH_TYPE), POINTER :: MESH
+    TYPE(REGION_TYPE), POINTER :: REGION
+    TYPE(VARYING_STRING) :: LOCAL_ERROR
+
+    CALL ENTERS("CMISSDecomposition_NodeNumberSurroundingElementsGetNumber",err,error,*999)
+
+    NULLIFY(REGION)
+    NULLIFY(MESH)
+    NULLIFY(DECOMPOSITION)
+    CALL REGION_USER_NUMBER_FIND(regionUserNumber,REGION,err,error,*999)
+    IF(ASSOCIATED(REGION)) THEN
+      CALL MESH_USER_NUMBER_FIND(meshUserNumber,REGION,MESH,err,error,*999)
+      IF(ASSOCIATED(MESH)) THEN
+        CALL DECOMPOSITION_USER_NUMBER_FIND(decompositionUserNumber,MESH,DECOMPOSITION,err,error,*999)
+        IF(ASSOCIATED(DECOMPOSITION)) THEN
+          CALL DECOMPOSITION_NODE_SURROUNDING_ELEMENTS_GET(DECOMPOSITION,nodeUserNumber,meshComponentNumber, &
+            & SURROUNDING_ELEMENTS,ERR,ERROR,*999)
+        ELSE
+          LOCAL_ERROR="A decomposition with an user number of "//TRIM(NUMBER_TO_VSTRING(decompositionUserNumber,"*",err,error))// &
+            & " does not exist on the mesh with an user number of "//TRIM(NUMBER_TO_VSTRING(meshUserNumber,"*",err,error))//"."
+          CALL FLAG_ERROR(LOCAL_ERROR,err,error,*999)
+        END IF
+      ELSE
+        LOCAL_ERROR="A mesh with an user number of "//TRIM(NUMBER_TO_VSTRING(meshUserNumber,"*",err,error))// &
+          & " does not exist on the region with an user number of "//TRIM(NUMBER_TO_VSTRING(regionUserNumber,"*",err,error))//"."
+        CALL FLAG_ERROR(LOCAL_ERROR,err,error,*999)
+      END IF
+    ELSE
+      LOCAL_ERROR="A region with an user number of "//TRIM(NUMBER_TO_VSTRING(regionUserNumber,"*",err,error))// &
+        & " does not exist."
+      CALL FLAG_ERROR(LOCAL_ERROR,err,error,*999)
+    END IF
+
+    CALL EXITS("CMISSDecomposition_NodeSurroundingElementsGetNumber")
+    RETURN
+999 CALL ERRORS("CMISSDecomposition_NodeSurroundingElementsGetNumber",err,error)
+    CALL EXITS("CMISSDecomposition_NodeSurroundingElementsGetNumber")
+    CALL CMISS_HANDLE_ERROR(err,error)
+    RETURN
+
+  END SUBROUTINE CMISSDecomposition_NodeSurroundingElementsGetNumber
+
+  !
+  !================================================================================================================================
+  !
+
+  !>Returns the domain for a given node in a decomposition identified by an object. \todo Maybe swap Node and MeshComponent?
+  SUBROUTINE CMISSDecomposition_NodeSurroundingElementsGetObj(decomposition,nodeUserNumber, &
+    & meshComponentNumber,SURROUNDING_ELEMENTS,err)
+
+    !Argument variables
+    TYPE(CMISSDecompositionType), INTENT(IN) :: decomposition !<The decomposition to get the surrounding elements for.
+    INTEGER(INTG), INTENT(IN) :: nodeUserNumber !<The user number of the noder.
+    INTEGER(INTG), INTENT(IN) :: meshComponentNumber !<The user number of the mesh component for the node.
+    INTEGER(INTG), POINTER, INTENT(OUT) :: SURROUNDING_ELEMENTS(:) !<On return, the number of surrounding elements for thenode
+    INTEGER(INTG), INTENT(OUT) :: err !<The error code.
+    !Local variables
+
+    CALL ENTERS("CMISSDecomposition_NodeSurroundingElementsGetObj",err,error,*999)
+
+    CALL DECOMPOSITION_NODE_SURROUNDING_ELEMENTS_GET(decomposition%DECOMPOSITION,nodeUserNumber,meshComponentNumber, &
+    & SURROUNDING_ELEMENTS,ERR,ERROR,*999)
+
+    CALL EXITS("CMISSDecomposition_NodeSurroundingElementsGetObj")
+    RETURN
+999 CALL ERRORS("CMISSDecomposition_NodeSurroundingElementsGetObj",err,error)
+    CALL EXITS("CMISSDecomposition_NodeSurroundingElementsGetObj")
+    CALL CMISS_HANDLE_ERROR(err,error)
+    RETURN
+
+  END SUBROUTINE CMISSDecomposition_NodeSurroundingElementsGetObj
+
+  !
+  !================================================================================================================================
+  !
   !>Finishes the creation of a mesh for a mesh identified by a user number.
   SUBROUTINE CMISSMesh_CreateFinishNumber(regionUserNumber,meshUserNumber,err)
 
