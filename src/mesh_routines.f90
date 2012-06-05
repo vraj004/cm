@@ -121,7 +121,9 @@ MODULE MESH_ROUTINES
   
   PUBLIC DECOMPOSITION_USER_NUMBER_FIND, DECOMPOSITION_USER_NUMBER_TO_DECOMPOSITION
   
-  PUBLIC DECOMPOSITION_NODE_DOMAIN_GET
+  PUBLIC DECOMPOSITION_NODE_DOMAIN_GET, DECOMPOSITION_NODE_NUMBER_SURROUNDING_ELEMENTS_GET
+
+  PUBLIC DECOMPOSITION_NODE_SURROUNDING_ELEMENTS_GET
 
   PUBLIC DECOMPOSITION_CALCULATE_LINES_SET,DECOMPOSITION_CALCULATE_FACES_SET
 
@@ -8912,10 +8914,10 @@ CONTAINS
   SUBROUTINE DECOMPOSITION_NODE_DOMAIN_GET(DECOMPOSITION,USER_NODE_NUMBER,MESH_COMPONENT_NUMBER,DOMAIN_NUMBER,ERR,ERROR,*)
 
     !Argument variables
-    TYPE(DECOMPOSITION_TYPE), POINTER :: DECOMPOSITION !<A pointer to the decomposition to set the element domain for
-    INTEGER(INTG), INTENT(IN) :: USER_NODE_NUMBER !<The global element number to set the domain for.
-    INTEGER(INTG), INTENT(IN) :: MESH_COMPONENT_NUMBER !<The mesh component number to set the domain for.
-    INTEGER(INTG), INTENT(OUT) :: DOMAIN_NUMBER !<On return, the domain of the global element.
+    TYPE(DECOMPOSITION_TYPE), POINTER :: DECOMPOSITION !<A pointer to the decomposition to find the node domain from
+    INTEGER(INTG), INTENT(IN) :: USER_NODE_NUMBER !<The global node number to find the domain for.
+    INTEGER(INTG), INTENT(IN) :: MESH_COMPONENT_NUMBER !<The mesh component number to get the domain for.
+    INTEGER(INTG), INTENT(OUT) :: DOMAIN_NUMBER !<On return, the domain of the global node number.
     INTEGER(INTG), INTENT(OUT) :: ERR !<The error code
     TYPE(VARYING_STRING), INTENT(OUT) :: ERROR !<The error string
     !Local Variables`
@@ -8989,10 +8991,251 @@ CONTAINS
     RETURN 1
   END SUBROUTINE DECOMPOSITION_NODE_DOMAIN_GET
 
-!
+  !
   !================================================================================================================================
   !
 
+    !>Gets the number of surround elements for a given node in a decomposition of a mesh. \see OPENCMISS::CMISSDecomposition_NodeNumberSurroundElementsGet
+  SUBROUTINE DECOMPOSITION_NODE_NUMBER_SURROUNDING_ELEMENTS_GET(DECOMPOSITION,USER_NODE_NUMBER,MESH_COMPONENT_NUMBER, &
+    & NUMBER_SURROUNDING_ELEMENTS,ERR,ERROR,*)
+
+    !Argument variables
+    TYPE(DECOMPOSITION_TYPE), POINTER :: DECOMPOSITION !<A pointer to the decomposition to find the node domain from
+    INTEGER(INTG), INTENT(IN) :: USER_NODE_NUMBER !<The global node number to find the domain for.
+    INTEGER(INTG), INTENT(IN) :: MESH_COMPONENT_NUMBER !<The mesh component number to get the domain for.
+    INTEGER(INTG), INTENT(OUT) :: NUMBER_SURROUNDING_ELEMENTS !<On return, the number of surrounding elements for the global node number.
+    INTEGER(INTG), INTENT(OUT) :: ERR !<The error code
+    TYPE(VARYING_STRING), INTENT(OUT) :: ERROR !<The error string
+    !Local Variables`
+    TYPE(MESH_TYPE), POINTER :: MESH
+    TYPE(MESH_TOPOLOGY_TYPE), POINTER :: MESH_TOPOLOGY
+    TYPE(DOMAIN_TOPOLOGY_TYPE), POINTER :: DOMAIN_TOPOLOGY
+    TYPE(VARYING_STRING) :: LOCAL_ERROR
+    INTEGER(INTG) :: GLOBAL_NODE_NUMBER,DOMAIN_LOCAL_NODE_NUMBER
+    TYPE(TREE_NODE_TYPE), POINTER :: TREE_NODE
+    TYPE(MESH_NODES_TYPE), POINTER :: MESH_NODES
+    TYPE(DOMAIN_TYPE), POINTER :: MESH_DOMAIN
+
+    CALL ENTERS("DECOMPOSITION_NODE_NUMBER_SURROUNDING_ELEMENTS_GET",ERR,ERROR,*999)
+
+!!TODO: interface should specify user element number ???
+    GLOBAL_NODE_NUMBER=0
+    IF(ASSOCIATED(DECOMPOSITION)) THEN
+      IF(DECOMPOSITION%DECOMPOSITION_FINISHED) THEN
+        MESH=>DECOMPOSITION%MESH
+        IF(ASSOCIATED(MESH)) THEN
+          MESH_TOPOLOGY=>MESH%TOPOLOGY(MESH_COMPONENT_NUMBER)%PTR
+          IF(ASSOCIATED(MESH_TOPOLOGY)) THEN
+            MESH_NODES=>MESH_TOPOLOGY%NODES
+            IF(ASSOCIATED(MESH_NODES)) THEN
+              NULLIFY(TREE_NODE)
+              CALL TREE_SEARCH(MESH_NODES%NODES_TREE,USER_NODE_NUMBER,TREE_NODE,ERR,ERROR,*999)
+              IF(ASSOCIATED(TREE_NODE)) THEN
+                CALL TREE_NODE_VALUE_GET(MESH_NODES%NODES_TREE,TREE_NODE,GLOBAL_NODE_NUMBER,ERR,ERROR,*999)
+                IF(GLOBAL_NODE_NUMBER>0.AND.GLOBAL_NODE_NUMBER<=MESH_TOPOLOGY%NODES%NUMBER_OF_NODES) THEN
+                  IF(MESH_COMPONENT_NUMBER>0.AND.MESH_COMPONENT_NUMBER<=MESH%NUMBER_OF_COMPONENTS) THEN
+                    MESH_DOMAIN=>DECOMPOSITION%DOMAIN(MESH_COMPONENT_NUMBER)%PTR
+                    IF(ASSOCIATED(MESH_DOMAIN)) THEN
+                      DOMAIN_TOPOLOGY=>MESH_DOMAIN%TOPOLOGY
+                      IF(ASSOCIATED(DOMAIN_TOPOLOGY)) THEN
+                        IF(ASSOCIATED(DOMAIN_TOPOLOGY%ELEMENTS)) THEN
+                          IF(ASSOCIATED(DOMAIN_TOPOLOGY%NODES)) THEN
+                            IF(ASSOCIATED(DOMAIN_TOPOLOGY%NODES%NODES)) THEN
+                              NULLIFY(TREE_NODE)
+                              CALL TREE_SEARCH(DOMAIN_TOPOLOGY%NODES%NODES_TREE,USER_NODE_NUMBER, & 
+                                & TREE_NODE,ERR,ERROR,*999)
+                              IF(ASSOCIATED(TREE_NODE)) THEN
+                                CALL TREE_NODE_VALUE_GET(DOMAIN_TOPOLOGY%NODES%NODES_TREE,TREE_NODE, & 
+                                  & DOMAIN_LOCAL_NODE_NUMBER,ERR,ERROR,*999)
+                                NUMBER_SURROUNDING_ELEMENTS=DOMAIN_TOPOLOGY%NODES%NODES(DOMAIN_LOCAL_NODE_NUMBER)% &
+                                & NUMBER_OF_SURROUNDING_ELEMENTS
+                              ELSE
+                                CALL FLAG_ERROR("Decomposition domain node does for corresponding user node not found", &
+                                  & ERR,ERROR,*999)
+                              ENDIF
+                            ELSE
+                              CALL FLAG_ERROR("Decomposition domain nodes are not associated", &
+                                & ERR,ERROR,*999)
+                            ENDIF
+                          ELSE
+                            CALL FLAG_ERROR("Decomposition domain nodes are not assicated", &
+                              & ERR,ERROR,*999)
+                          ENDIF
+                        ELSE
+                          CALL FLAG_ERROR("Decomposition domain topology elements are not associated", &
+                            & ERR,ERROR,*999)
+                        ENDIF
+                      ELSE
+                        CALL FLAG_ERROR("Decomposition domain topology not associated", &
+                          & ERR,ERROR,*999)
+                      ENDIF
+                    ELSE
+                      CALL FLAG_ERROR("Decomposition domain is not associated", &
+                        & ERR,ERROR,*999)
+                    ENDIF 
+                  ELSE
+                    LOCAL_ERROR="Mesh Component number "//TRIM(NUMBER_TO_VSTRING(MESH_COMPONENT_NUMBER,"*",ERR,ERROR))// &
+                      & " is invalid. The limits are 1 to "// &
+                      & TRIM(NUMBER_TO_VSTRING(MESH%NUMBER_OF_COMPONENTS,"*",ERR,ERROR))
+                    CALL FLAG_ERROR(LOCAL_ERROR,ERR,ERROR,*999)
+                  ENDIF
+                ELSE
+                  LOCAL_ERROR="Global node number found "//TRIM(NUMBER_TO_VSTRING(GLOBAL_NODE_NUMBER,"*",ERR,ERROR))// &
+                    & " is invalid. The limits are 1 to "// &
+                    & TRIM(NUMBER_TO_VSTRING(MESH_TOPOLOGY%NODES%NUMBER_OF_NODES,"*",ERR,ERROR))
+                  CALL FLAG_ERROR(LOCAL_ERROR,ERR,ERROR,*999)
+                ENDIF
+              ELSE
+                CALL FLAG_ERROR("Decomposition mesh node corresponding to user number not found",ERR,ERROR,*999)
+              ENDIF
+            ELSE
+              CALL FLAG_ERROR("Decomposition mesh nodes are not associated",ERR,ERROR,*999)
+            ENDIF
+          ELSE
+            CALL FLAG_ERROR("Decomposition mesh topology is not associated",ERR,ERROR,*999)
+          ENDIF
+        ELSE
+          CALL FLAG_ERROR("Decomposition mesh is not associated",ERR,ERROR,*999)
+        ENDIF
+      ELSE
+        CALL FLAG_ERROR("Decomposition has not been finished",ERR,ERROR,*999)
+      ENDIF
+    ELSE
+      CALL FLAG_ERROR("Decomposition is not associated",ERR,ERROR,*999)
+    ENDIF
+
+    CALL EXITS("DECOMPOSITION_NODE_NUMBER_SURROUNDING_ELEMENTS_GET")
+    RETURN
+999 CALL ERRORS("DECOMPOSITION_NODE_NUMBER_SURROUNDING_ELEMENTS_GET",ERR,ERROR)
+    CALL EXITS("DECOMPOSITION_NODE_NUMBER_SURROUNDING_ELEMENTS_GET")
+    RETURN 1
+  END SUBROUTINE DECOMPOSITION_NODE_NUMBER_SURROUNDING_ELEMENTS_GET
+
+  !
+  !================================================================================================================================
+  !
+
+    !>Gets the surround elements for a given node in a decomposition of a mesh. \see OPENCMISS::CMISSDecomposition_NodeSurroundElementsGet
+  SUBROUTINE DECOMPOSITION_NODE_SURROUNDING_ELEMENTS_GET(DECOMPOSITION,USER_NODE_NUMBER,MESH_COMPONENT_NUMBER, &
+    & SURROUNDING_ELEMENTS,ERR,ERROR,*)
+
+    !Argument variables
+    TYPE(DECOMPOSITION_TYPE), POINTER :: DECOMPOSITION !<A pointer to the decomposition to find the node domain from
+    INTEGER(INTG), INTENT(IN) :: USER_NODE_NUMBER !<The global node number to find the domain for.
+    INTEGER(INTG), INTENT(IN) :: MESH_COMPONENT_NUMBER !<The mesh component number to get the domain for.
+    INTEGER(INTG), POINTER, INTENT(OUT) :: SURROUNDING_ELEMENTS(:) !<On return, the number of surrounding elements for the global node number.
+    INTEGER(INTG), INTENT(OUT) :: ERR !<The error code
+    TYPE(VARYING_STRING), INTENT(OUT) :: ERROR !<The error string
+    !Local Variables`
+    TYPE(MESH_TYPE), POINTER :: MESH
+    TYPE(MESH_TOPOLOGY_TYPE), POINTER :: MESH_TOPOLOGY
+    TYPE(DOMAIN_TOPOLOGY_TYPE), POINTER :: DOMAIN_TOPOLOGY
+    TYPE(VARYING_STRING) :: LOCAL_ERROR
+    INTEGER(INTG) :: GLOBAL_NODE_NUMBER,DOMAIN_LOCAL_NODE_NUMBER
+    TYPE(TREE_NODE_TYPE), POINTER :: TREE_NODE
+    TYPE(MESH_NODES_TYPE), POINTER :: MESH_NODES
+    TYPE(DOMAIN_TYPE), POINTER :: MESH_DOMAIN
+
+    CALL ENTERS("DECOMPOSITION_NODE_NUMBER_SURROUNDING_ELEMENTS_GET",ERR,ERROR,*999)
+
+!!TODO: interface should specify user element number ???
+    GLOBAL_NODE_NUMBER=0
+    IF(ASSOCIATED(DECOMPOSITION)) THEN
+      IF(DECOMPOSITION%DECOMPOSITION_FINISHED) THEN
+        MESH=>DECOMPOSITION%MESH
+        IF(ASSOCIATED(MESH)) THEN
+          MESH_TOPOLOGY=>MESH%TOPOLOGY(MESH_COMPONENT_NUMBER)%PTR
+          IF(ASSOCIATED(MESH_TOPOLOGY)) THEN
+            MESH_NODES=>MESH_TOPOLOGY%NODES
+            IF(ASSOCIATED(MESH_NODES)) THEN
+              NULLIFY(TREE_NODE)
+              CALL TREE_SEARCH(MESH_NODES%NODES_TREE,USER_NODE_NUMBER,TREE_NODE,ERR,ERROR,*999)
+              IF(ASSOCIATED(TREE_NODE)) THEN
+                CALL TREE_NODE_VALUE_GET(MESH_NODES%NODES_TREE,TREE_NODE,GLOBAL_NODE_NUMBER,ERR,ERROR,*999)
+                IF(GLOBAL_NODE_NUMBER>0.AND.GLOBAL_NODE_NUMBER<=MESH_TOPOLOGY%NODES%NUMBER_OF_NODES) THEN
+                  IF(MESH_COMPONENT_NUMBER>0.AND.MESH_COMPONENT_NUMBER<=MESH%NUMBER_OF_COMPONENTS) THEN
+                    MESH_DOMAIN=>DECOMPOSITION%DOMAIN(MESH_COMPONENT_NUMBER)%PTR
+                    IF(ASSOCIATED(MESH_DOMAIN)) THEN
+                      DOMAIN_TOPOLOGY=>MESH_DOMAIN%TOPOLOGY
+                      IF(ASSOCIATED(DOMAIN_TOPOLOGY)) THEN
+                        IF(ASSOCIATED(DOMAIN_TOPOLOGY%ELEMENTS)) THEN
+                          IF(ASSOCIATED(DOMAIN_TOPOLOGY%NODES)) THEN
+                            IF(ASSOCIATED(DOMAIN_TOPOLOGY%NODES%NODES)) THEN
+                              NULLIFY(TREE_NODE)
+                              CALL TREE_SEARCH(DOMAIN_TOPOLOGY%NODES%NODES_TREE,USER_NODE_NUMBER, & 
+                                & TREE_NODE,ERR,ERROR,*999)
+                              IF(ASSOCIATED(TREE_NODE)) THEN
+                                CALL TREE_NODE_VALUE_GET(DOMAIN_TOPOLOGY%NODES%NODES_TREE,TREE_NODE, & 
+                                  & DOMAIN_LOCAL_NODE_NUMBER,ERR,ERROR,*999)
+                                ALLOCATE(SURROUNDING_ELEMENTS(DOMAIN_TOPOLOGY%NODES%NODES(DOMAIN_LOCAL_NODE_NUMBER) &
+                                  & %NUMBER_OF_SURROUNDING_ELEMENTS),STAT=ERR)
+                                SURROUNDING_ELEMENTS => & 
+                                  & DOMAIN_TOPOLOGY%NODES%NODES(DOMAIN_LOCAL_NODE_NUMBER)%SURROUNDING_ELEMENTS
+                              ELSE
+                                CALL FLAG_ERROR("Decomposition domain node does for corresponding user node not found", &
+                                  & ERR,ERROR,*999)
+                              ENDIF
+                            ELSE
+                              CALL FLAG_ERROR("Decomposition domain nodes are not associated", &
+                                & ERR,ERROR,*999)
+                            ENDIF
+                          ELSE
+                            CALL FLAG_ERROR("Decomposition domain nodes are not assicated", &
+                              & ERR,ERROR,*999)
+                          ENDIF
+                        ELSE
+                          CALL FLAG_ERROR("Decomposition domain topology elements are not associated", &
+                            & ERR,ERROR,*999)
+                        ENDIF
+                      ELSE
+                        CALL FLAG_ERROR("Decomposition domain topology not associated", &
+                          & ERR,ERROR,*999)
+                      ENDIF
+                    ELSE
+                      CALL FLAG_ERROR("Decomposition domain is not associated", &
+                        & ERR,ERROR,*999)
+                    ENDIF 
+                  ELSE
+                    LOCAL_ERROR="Mesh Component number "//TRIM(NUMBER_TO_VSTRING(MESH_COMPONENT_NUMBER,"*",ERR,ERROR))// &
+                      & " is invalid. The limits are 1 to "// &
+                      & TRIM(NUMBER_TO_VSTRING(MESH%NUMBER_OF_COMPONENTS,"*",ERR,ERROR))
+                    CALL FLAG_ERROR(LOCAL_ERROR,ERR,ERROR,*999)
+                  ENDIF
+                ELSE
+                  LOCAL_ERROR="Global node number found "//TRIM(NUMBER_TO_VSTRING(GLOBAL_NODE_NUMBER,"*",ERR,ERROR))// &
+                    & " is invalid. The limits are 1 to "// &
+                    & TRIM(NUMBER_TO_VSTRING(MESH_TOPOLOGY%NODES%NUMBER_OF_NODES,"*",ERR,ERROR))
+                  CALL FLAG_ERROR(LOCAL_ERROR,ERR,ERROR,*999)
+                ENDIF
+              ELSE
+                CALL FLAG_ERROR("Decomposition mesh node corresponding to user number not found",ERR,ERROR,*999)
+              ENDIF
+            ELSE
+              CALL FLAG_ERROR("Decomposition mesh nodes are not associated",ERR,ERROR,*999)
+            ENDIF
+          ELSE
+            CALL FLAG_ERROR("Decomposition mesh topology is not associated",ERR,ERROR,*999)
+          ENDIF
+        ELSE
+          CALL FLAG_ERROR("Decomposition mesh is not associated",ERR,ERROR,*999)
+        ENDIF
+      ELSE
+        CALL FLAG_ERROR("Decomposition has not been finished",ERR,ERROR,*999)
+      ENDIF
+    ELSE
+      CALL FLAG_ERROR("Decomposition is not associated",ERR,ERROR,*999)
+    ENDIF
+
+    CALL EXITS("DECOMPOSITION_NODE_SURROUNDING_ELEMENTS_GET")
+    RETURN
+999 CALL ERRORS("DECOMPOSITION_NODE_SURROUNDING_ELEMENTS_GET",ERR,ERROR)
+    CALL EXITS("DECOMPOSITION_NODE_SURROUNDING_ELEMENTS_GET")
+    RETURN 1
+  END SUBROUTINE DECOMPOSITION_NODE_SURROUNDING_ELEMENTS_GET
+
+  !
+  !================================================================================================================================
+  !
   !>Initialises the embedded meshes.
   SUBROUTINE EMBEDDED_MESH_INITIALISE(MESH_EMBEDDING,ERR,ERROR,*)
 
