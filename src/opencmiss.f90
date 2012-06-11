@@ -36074,7 +36074,7 @@ CONTAINS
 
   !>Returns the surround elements for a given node in a decomposition identified by a user number.
   SUBROUTINE CMISSDecomposition_NodeSurroundingElementsGetNumber(regionUserNumber,meshUserNumber,decompositionUserNumber, &
-    & nodeUserNumber,meshComponentNumber,SURROUNDING_ELEMENTS,err)
+    & nodeUserNumber,meshComponentNumber,SURROUNDING_ELEMENTS,numberSurroundingElements,err)
 
     !Argument variables
     INTEGER(INTG), INTENT(IN) :: regionUserNumber !<The user number of the region containing the mesh to get the node surrounding elements for.
@@ -36082,7 +36082,8 @@ CONTAINS
     INTEGER(INTG), INTENT(IN) :: decompositionUserNumber !<The user number of the decomposition to get the node surrounding elements for.
     INTEGER(INTG), INTENT(IN) :: nodeUserNumber !<The user number of the node to get the surrounding elements for.
     INTEGER(INTG), INTENT(IN) :: meshComponentNumber !<The user number of the mesh component to get the surrounding elements for.
-    INTEGER(INTG), POINTER, INTENT(OUT) :: SURROUNDING_ELEMENTS(:) !<On return, the elements surrounding the node.
+    INTEGER(INTG), INTENT(IN) :: numberSurroundingElements !<The number of surrounding elements that will passed back in the SURROUNDING_ELEMENTS array>
+    INTEGER(INTG), INTENT(OUT) :: SURROUNDING_ELEMENTS(numberSurroundingElements) !<On return, the elements surrounding the node.
     INTEGER(INTG), INTENT(OUT) :: err !<The error code.
     !Local variables
     TYPE(DECOMPOSITION_TYPE), POINTER :: DECOMPOSITION
@@ -36102,7 +36103,7 @@ CONTAINS
         CALL DECOMPOSITION_USER_NUMBER_FIND(decompositionUserNumber,MESH,DECOMPOSITION,err,error,*999)
         IF(ASSOCIATED(DECOMPOSITION)) THEN
           CALL DECOMPOSITION_NODE_SURROUNDING_ELEMENTS_GET(DECOMPOSITION,nodeUserNumber,meshComponentNumber, &
-            & SURROUNDING_ELEMENTS,ERR,ERROR,*999)
+            & SURROUNDING_ELEMENTS,numberSurroundingElements,ERR,ERROR,*999)
         ELSE
           LOCAL_ERROR="A decomposition with an user number of "//TRIM(NUMBER_TO_VSTRING(decompositionUserNumber,"*",err,error))// &
             & " does not exist on the mesh with an user number of "//TRIM(NUMBER_TO_VSTRING(meshUserNumber,"*",err,error))//"."
@@ -36134,20 +36135,21 @@ CONTAINS
 
   !>Returns the domain for a given node in a decomposition identified by an object. \todo Maybe swap Node and MeshComponent?
   SUBROUTINE CMISSDecomposition_NodeSurroundingElementsGetObj(decomposition,nodeUserNumber, &
-    & meshComponentNumber,SURROUNDING_ELEMENTS,err)
+    & meshComponentNumber,SURROUNDING_ELEMENTS,numberSurroundingElements,err)
 
     !Argument variables
     TYPE(CMISSDecompositionType), INTENT(IN) :: decomposition !<The decomposition to get the surrounding elements for.
     INTEGER(INTG), INTENT(IN) :: nodeUserNumber !<The user number of the noder.
     INTEGER(INTG), INTENT(IN) :: meshComponentNumber !<The user number of the mesh component for the node.
-    INTEGER(INTG), POINTER, INTENT(OUT) :: SURROUNDING_ELEMENTS(:) !<On return, the number of surrounding elements for thenode
+    INTEGER(INTG), INTENT(IN) :: numberSurroundingElements !<The number of surrounding elements that will be passed back in array SURROUNDING_ELEMENTS>
+    INTEGER(INTG), INTENT(OUT) :: SURROUNDING_ELEMENTS(numberSurroundingElements) !<On return, the number of surrounding elements for thenode
     INTEGER(INTG), INTENT(OUT) :: err !<The error code.
     !Local variables
 
     CALL ENTERS("CMISSDecomposition_NodeSurroundingElementsGetObj",err,error,*999)
 
     CALL DECOMPOSITION_NODE_SURROUNDING_ELEMENTS_GET(decomposition%DECOMPOSITION,nodeUserNumber,meshComponentNumber, &
-    & SURROUNDING_ELEMENTS,ERR,ERROR,*999)
+    & SURROUNDING_ELEMENTS,numberSurroundingelements,ERR,ERROR,*999)
 
     CALL EXITS("CMISSDecomposition_NodeSurroundingElementsGetObj")
     RETURN
