@@ -9841,8 +9841,8 @@ CONTAINS
 
     INTEGER(INTG) :: DUMMY_ERR,ng,ngi,ngj,ngk,ne
     INTEGER(INTG) :: GAUSS_START(4) = [ 0,1,3,6 ]
-    INTEGER(INTG) :: NUMBER_OF_GAUSS_POINTS=4
-    REAL(DP) :: XI(3),W,Wi,Wj,Wk,ELEMENT_VOLUME
+    INTEGER(INTG) :: numberGaussPoints
+    REAL(DP) :: W,Wi,Wj,Wk,ELEMENT_VOLUME
     REAL(DP) :: XIG(10),WIG(10)
     TYPE(COORDINATE_SYSTEM_TYPE), POINTER :: COORDINATE_SYSTEM
     TYPE(FIELD_INTERPOLATED_POINT_PTR_TYPE), POINTER :: INTERPOLATED_POINT(:)
@@ -9873,28 +9873,61 @@ CONTAINS
               CALL FIELD_INTERPOLATION_PARAMETERS_INITIALISE(FIELD,INTERPOLATION_PARAMETERS,ERR,ERROR,*999)
               CALL FIELD_INTERPOLATED_POINTS_INITIALISE(INTERPOLATION_PARAMETERS,INTERPOLATED_POINT,ERR,ERROR,*999)
               CALL FIELD_INTERPOLATED_POINTS_METRICS_INITIALISE(INTERPOLATED_POINT,INTERPOLATED_POINT_METRICS,ERR,ERROR,*999)
-
+              !Get basis type for the first component of the mesh defined with this geometric field
+              CALL FIELD_VARIABLE_GET(FIELD,FIELD,FIELD_U_VARIABLE_TYPE,FIELD_VARIABLE,ERR,ERROR,*999)
+              IF(ASSOCIATED(FIELD_VARIABLE)) THEN
+                DOMAIN=>FIELD_VARIABLE%COMPONENTS(1)%DOMAIN
+                IF(ASSOCIATED(DOMAIN))THEN
+                  TOPOLOGY=>DOMAIN%TOPOLOGY
+                  IF(ASSOCIATED(TOPOLOGY)) THEN
+                    DECOMPOSITION=>FIELD%DECOMPOSITION
+                    IF(ASSOCIATED(DECOMPOSITION)) THEN
+                      DECOMP_TOPOLOGY=>DECOMPOSITION%TOPOLOGY
+                      IF(ASSOCIATED(DECOMP_TOPOLOGY)) THEN
+                        DECOMP_ELEMENTS=>DECOMP_TOPOLOGY%ELEMENTS
+                        IF(ASSOCIATED(DECOMP_ELEMENTS)) THEN
+                          DECOMP_TOPOLOGY_BASIS=>DECOMP_ELEMENTS%ELEMENTS(1)%BASIS  
+                          SELECT CASE(BASIS%TYPE)
+                          CASE(BASIS_LAGRANGE_HERMITE_TP_TYPE)
+                            CALL BASIS_GAUSS_POINTS_CALCULATE(DECOMP_TOPOLOGY_BASIS,4,3,numberGaussPoints,XIG,WIG,ERR,ERROR,*999)
+                          CASE(BASIS_SIMPLEX_TYPE)
+                            CALL BASIS_GAUSS_POINTS_CALCULATE(DECOMP_TOPOLOGY_BASIS,5,3,numberGaussPoints,XIG,WIG,ERR,ERROR,*999)
+                          CASE DEFAULT
+                            LOCAL_ERROR="Basis type "//TRIM(NUMBER_TO_VSTRING(BASIS%TYPE,"*",err,error,*999))//" &
+                              & is invalid or not implemented"
+                            CALL FLAG_ERROR(LOCAL_ERROR,err,ERROR,*999)
+                          END SELECT
+                        ELSE
+                          CALL FLAG_ERROR("Elements are not associated with the decomposition",err,error,*999)
+                        ENDIF
+                      ELSE
+                        CALL FLAG_ERROR("Decomposition topology is not associated",err,error,*999)
+                      ENDIF
+                    ELSE
+                      CALL FLAG_ERROR("Decomposition is not associated",err,error,*999)
+                    ENDIF
+                  ELSE
+                    CALL FLAG_ERROR("Domain topology is not associated",err,error,*999)
+                  ENDIF
+                ELSE
+                  CALL FLAG_ERROR("Domain is not associated with the geometric field component 1",err,error,*999)
+                ENDIF
+              ELSE
+                CALL FLAG_ERROR("Field variable is not associated",err,error,*999)
+              ENDIF
               !Loop over the elements
               DO ne=1,FIELD%DECOMPOSITION%TOPOLOGY%ELEMENTS%NUMBER_OF_ELEMENTS
                 CALL FIELD_INTERPOLATION_PARAMETERS_ELEMENT_GET(FIELD_VALUES_SET_TYPE,ne, &
                   & INTERPOLATION_PARAMETERS(FIELD_U_VARIABLE_TYPE)%PTR,ERR,ERROR,*999)
                 ELEMENT_VOLUME=0.0_DP
-                DO ngi=1,NUMBER_OF_GAUSS_POINTS
-                  XI(1)=XIG(GAUSS_START(NUMBER_OF_GAUSS_POINTS)+ngi)
-                  Wi=WIG(GAUSS_START(NUMBER_OF_GAUSS_POINTS)+ngi)
-                  DO ngj=1,NUMBER_OF_GAUSS_POINTS
-                    XI(2)=XIG(GAUSS_START(NUMBER_OF_GAUSS_POINTS)+ngj)
-                    Wj=WIG(GAUSS_START(NUMBER_OF_GAUSS_POINTS)+ngj)
-                    DO ngk=1,NUMBER_OF_GAUSS_POINTS
-                      XI(3)=XIG(GAUSS_START(NUMBER_OF_GAUSS_POINTS)+ngk)
-                      Wk=WIG(GAUSS_START(NUMBER_OF_GAUSS_POINTS)+ngk)
-                      CALL FIELD_INTERPOLATE_XI(FIRST_PART_DERIV,XI,INTERPOLATED_POINT(FIELD_U_VARIABLE_TYPE)%PTR,ERR,ERROR,*999)
-                      CALL FIELD_INTERPOLATED_POINT_METRICS_CALCULATE(COORDINATE_JACOBIAN_VOLUME_TYPE, &
-                        & INTERPOLATED_POINT_METRICS(FIELD_U_VARIABLE_TYPE)%PTR,ERR,ERROR,*999)
-                      ELEMENT_VOLUME=ELEMENT_VOLUME+W*INTERPOLATED_POINT_METRICS(FIELD_U_VARIABLE_TYPE)%PTR%JACOBIAN
-                    ENDDO !ngk
-                  ENDDO !ngj
-                ENDDO !ngi
+                DO ng=1,numberGaussPoints
+                  XI(1:3)=XIG(1:3,ng)
+                  W=WIG(ng)
+                  CALL FIELD_INTERPOLATE_XI(FIRST_PART_DERIV,XI,INTERPOLATED_POINT(FIELD_U_VARIABLE_TYPE)%PTR,ERR,ERROR,*999)
+                  CALL FIELD_INTERPOLATED_POINT_METRICS_CALCULATE(COORDINATE_JACOBIAN_VOLUME_TYPE, &
+                    & INTERPOLATED_POINT_METRICS(FIELD_U_VARIABLE_TYPE)%PTR,ERR,ERROR,*999)
+                  ELEMENT_VOLUME=ELEMENT_VOLUME+W*INTERPOLATED_POINT_METRICS(FIELD_U_VARIABLE_TYPE)%PTR%JACOBIAN
+                ENDDO !ng
                 FIELD%GEOMETRIC_FIELD_PARAMETERS%VOLUMES(ne)=ELEMENT_VOLUME
               ENDDO !ne
 
