@@ -262,6 +262,8 @@ MODULE BASIS_ROUTINES
   PUBLIC BASIS_COLLAPSED_XI_SET
   
   PUBLIC BASIS_EVALUATE_XI
+
+  PUBLIC BASIS_GAUSS_POINTS_CALCULATE
   
   PUBLIC BASIS_INTERPOLATE_GAUSS,BASIS_INTERPOLATE_XI,BASIS_INTERPOLATE_LOCAL_FACE_GAUSS
 
@@ -745,8 +747,8 @@ CONTAINS
     INTEGER(INTG), INTENT(IN) :: order !<The order (for Simplex) or the number of gauss points in a direction (for LHTP)
     INTEGER(INTG), INTENT(IN) :: numCoords !<The number of coordinate directions of the system in which to calculate gauss points (1D, 2D, 3D)
     INTEGER(INTG), INTENT(OUT) :: numberGaussPoints !<on return, the number of gauss points calculated
-    REAL(DP), INTENT(OUT) :: gaussPoints(:,:) !<On return, the calculated gauss point coordinates gaussPoints(nj,ng)
-    REAL(DP), INTENT(OUT) :: gaussWeights(:) <!gaussWeights(ng) gauss weight for particular gauss point
+    REAL(DP), ALLOCATABLE, INTENT(OUT) :: gaussPoints(:,:) !<On return, the calculated gauss point coordinates gaussPoints(nj,ng)
+    REAL(DP), ALLOCATABLE, INTENT(OUT) :: gaussWeights(:) !<gaussWeights(ng) gauss weight for particular gauss point
     INTEGER(INTG), INTENT(OUT) :: err !<The error code
     TYPE(VARYING_STRING), INTENT(OUT) :: error !<The error string
     !Local Variables
@@ -757,41 +759,44 @@ CONTAINS
     CALL ENTERS("BASIS_GAUSS_POINTS_CALCULATE_DP",err,error,*999)
     number_of_vertices=0
     IF(ASSOCIATED(basis)) THEN
+        !current code assumes same order in each direction
+      SELECT CASE(numCoords)
+      CASE(1)
+        NUM_GAUSS_1=order
+        NUM_GAUSS_2=0
+        NUM_GAUSS_3=0
+        MAX_GAUSS=order
+      CASE(2)
+        NUM_GAUSS_1=order
+        NUM_GAUSS_2=order
+        NUM_GAUSS_3=0
+        MAX_GAUSS=order*order
+      CASE(3)
+        NUM_GAUSS_1=order
+        NUM_GAUSS_2=order
+        NUM_GAUSS_3=order
+        MAX_GAUSS=order*order*order
+      CASE DEFAULT
+        LOCAL_ERROR="Number of coordinates " &
+        & //TRIM(NUMBER_TO_VSTRING(numCoords,"*",err,error))//" is invalid or not implemented"
+        CALL FLAG_ERROR(LOCAL_ERROR,err,ERROR,*999)
+      END SELECT
+      !Allocate arrays
+      ALLOCATE(W(MAX_GAUSS,numCoords),STAT=ERR)
+      IF(ERR/=0) CALL FLAG_ERROR("Could not allocate weights",ERR,ERROR,*999)
+      ALLOCATE(XI(numCoords),STAT=ERR)
+      IF(ERR/=0) CALL FLAG_ERROR("Could not allocate gauss point coordinates",ERR,ERROR,*999)
+      ALLOCATE(XICOORDS(MAX_GAUSS,numCoords),STAT=ERR)
+      IF(ERR/=0) CALL FLAG_ERROR("Could not allocate gauss point coordinates",ERR,ERROR,*999)
+      ALLOCATE(XI_MATRIX(MAX_GAUSS,MAX_GAUSS,MAX_GAUSS,numCoords),STAT=ERR)
+      IF(ERR/=0) CALL FLAG_ERROR("Could not allocate XI matrix",ERR,ERROR,*999)
+      ALLOCATE(gaussPoints(numCoords,MAX_GAUSS),STAT=ERR)
+      IF(ERR/=0) CALL FLAG_ERROR("Could not allocate weights",ERR,ERROR,*999)
+      ALLOCATE(gaussWeights(MAX_GAUSS),STAT=ERR)
+      IF(ERR/=0) CALL FLAG_ERROR("Could not allocate weights",ERR,ERROR,*999)
+
       SELECT CASE(basis%TYPE)
       CASE(BASIS_LAGRANGE_HERMITE_TP_TYPE)
-        !current code assumes same order in each direction
-        SELECT CASE(numCoords)
-        CASE(1)
-          NUM_GAUSS_1=order
-          NUM_GAUSS_2=0
-          NUM_GAUSS_3=0
-          MAX_GAUSS=order
-        CASE(2)
-          NUM_GAUSS_1=order
-          NUM_GAUSS_2=order
-          NUM_GAUSS_3=0
-          MAX_GAUSS=order*order
-        CASE(3)
-          NUM_GAUSS_1=order
-          NUM_GAUSS_2=order
-          NUM_GAUSS_3=order
-          MAX_GAUSS=order*order*order
-        CASE DEFAULT
-          LOCAL_ERROR="Number of coordinates "//TRIM(NUMBER_TO_VSTRING(numCoords,"*",err,error,*999))//" is  &
-            & invalid or not implemented"
-          CALL FLAG_ERROR(LOCAL_ERROR,err,ERROR,*999)
-        END SELECT
-        !Allocate arrays
-        ALLOCATE(W(MAX_GAUSS,numCoords),STAT=ERR)
-        IF(ERR/=0) CALL FLAG_ERROR("Could not allocate weights",ERR,ERROR,*999)
-        ALLOCATE(XI(numCoords),STAT=ERR)
-        IF(ERR/=0) CALL FLAG_ERROR("Could not allocate gauss point coordinates",ERR,ERROR,*999)
-        ALLOCATE(XICOORDS(MAX_GAUSS,numCoords),STAT=ERR)
-        IF(ERR/=0) CALL FLAG_ERROR("Could not allocate gauss point coordinates",ERR,ERROR,*999)
-        ALLOCATE(XI_MATRIX(MAX_GAUSS,MAX_GAUSS,MAX_GAUSS,numCoords),STAT=ERR)
-        IF(ERR/=0) CALL FLAG_ERROR("Could not allocate XI matrix",ERR,ERROR,*999)
-        ALLOCATE(gaussWeights(order,numCoords),STAT=ERR)
-        IF(ERR/=0) CALL FLAG_ERROR("Could not allocate weights",ERR,ERROR,*999)
 
         DO nj=1,numCoords
           CALL GAUSS_LEGENDRE(order,0.0_DP,1.0_DP,XICOORDS(1:order,nj),W(1:order,nj),err,error,*999)
@@ -821,7 +826,9 @@ CONTAINS
         ENDIF
         CALL GAUSS_SIMPLEX(order,number_of_vertices,numberGaussPoints,gaussPoints,gaussWeights,err,error,*999)
       CASE DEFAULT
-        LOCAL_ERROR="Basis type "//TRIM(NUMBER_TO_VSTRING(BASIS%TYPE,"*",err,error,*999))//" is invalid or not implemented"
+        LOCAL_ERROR="Basis type "// &
+        & TRIM(NUMBER_TO_VSTRING(BASIS%TYPE,"*",err,error))// &
+        & " is invalid or not implemented"
         CALL FLAG_ERROR(LOCAL_ERROR,err,ERROR,*999)
       END SELECT
     ELSE
@@ -5742,8 +5749,8 @@ CONTAINS
     TYPE(VARYING_STRING) :: LOCAL_ERROR
     
     CALL ENTERS("GAUSS_SIMPLEX",ERR,ERROR,*999)
-
-    IF(SIZE(X,1)>=NUMBER_OF_VERTICES) THEN
+    WRITE(*,*) NUMBER_OF_VERTICES
+    IF(SIZE(X,1)>=(NUMBER_OF_VERTICES-1)) THEN
       SELECT CASE(NUMBER_OF_VERTICES)
       CASE(2)
         !Line
