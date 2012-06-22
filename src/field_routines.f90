@@ -9830,8 +9830,7 @@ CONTAINS
     INTEGER(INTG) :: GAUSS_START(4) = [ 0,1,3,6 ]
     INTEGER(INTG) :: numberGaussPoints,i
     REAL(DP) :: W,Wi,Wj,Wk,ELEMENT_VOLUME
-    REAL(DP), ALLOCATABLE :: XIG(:,:),WIG(:)
-    REAL(DP) :: XI(3)
+    REAL(DP), ALLOCATABLE :: XIG(:,:),WIG(:),XI(:)
     TYPE(FIELD_VARIABLE_TYPE), POINTER :: FIELD_VARIABLE
     TYPE(DOMAIN_TYPE), POINTER :: DOMAIN
     TYPE(DOMAIN_TOPOLOGY_TYPE), POINTER :: TOPOLOGY
@@ -9879,6 +9878,8 @@ CONTAINS
                           SELECT CASE(BASIS%TYPE)
                           CASE(BASIS_LAGRANGE_HERMITE_TP_TYPE)
                             MAX_GAUSS=4*4*4
+                            ALLOCATE(XI(3),STAT=ERR)
+                            IF(ERR/=0) CALL FLAG_ERROR("Could not allocate XI matrix",ERR,ERROR,*999)
                             ALLOCATE(XIG(3,MAX_GAUSS),STAT=ERR)
                             IF(ERR/=0) CALL FLAG_ERROR("Could not allocate XIG matrix",ERR,ERROR,*999)
                             ALLOCATE(WIG(MAX_GAUSS),STAT=ERR)
@@ -9886,17 +9887,15 @@ CONTAINS
                             CALL BASIS_GAUSS_POINTS_CALCULATE(BASIS,4,3,numberGaussPoints,XIG,WIG,ERR,ERROR,*999)
                           CASE(BASIS_SIMPLEX_TYPE)
 
-                            MAX_GAUSS=5*5*5
-                            ALLOCATE(XIG(3,MAX_GAUSS),STAT=ERR)
+                            MAX_GAUSS=4*4*4
+                            ALLOCATE(XI(4),STAT=ERR)
+                            IF(ERR/=0) CALL FLAG_ERROR("Could not allocate XI matrix",ERR,ERROR,*999)
+                            ALLOCATE(XIG(4,MAX_GAUSS),STAT=ERR)
                             IF(ERR/=0) CALL FLAG_ERROR("Could not allocate XIG matrix",ERR,ERROR,*999)
                             ALLOCATE(WIG(MAX_GAUSS),STAT=ERR)
                             IF(ERR/=0) CALL FLAG_ERROR("Could not allocate W matrix",ERR,ERROR,*999)
                             CALL BASIS_GAUSS_POINTS_CALCULATE(BASIS,4,3,numberGaussPoints,XIG,WIG,ERR,ERROR,*999)
-                            WRITE(*,*) numberGaussPoints
-                            DO i=1,numberGaussPoints
-                              WRITE(*,*) WIG(i)
-                            ENDDO
-                          CASE DEFAULT
+                           CASE DEFAULT
                             LOCAL_ERROR="Basis type "//TRIM(NUMBER_TO_VSTRING(BASIS%TYPE,"*",err,error))//" &
                               & is invalid or not implemented"
                             CALL FLAG_ERROR(LOCAL_ERROR,err,ERROR,*999)
@@ -9919,21 +9918,39 @@ CONTAINS
               ELSE
                 CALL FLAG_ERROR("Field variable is not associated",err,error,*999)
               ENDIF
-              !Loop over the elements
-              DO ne=1,FIELD%DECOMPOSITION%TOPOLOGY%ELEMENTS%NUMBER_OF_ELEMENTS
-                CALL FIELD_INTERPOLATION_PARAMETERS_ELEMENT_GET(FIELD_VALUES_SET_TYPE,ne, &
-                  & INTERPOLATION_PARAMETERS(FIELD_U_VARIABLE_TYPE)%PTR,ERR,ERROR,*999)
-                ELEMENT_VOLUME=0.0_DP
-                DO ng=1,numberGaussPoints
-                  XI(1:3)=XIG(1:3,ng)
-                  W=WIG(ng)
-                  CALL FIELD_INTERPOLATE_XI(FIRST_PART_DERIV,XI,INTERPOLATED_POINT(FIELD_U_VARIABLE_TYPE)%PTR,ERR,ERROR,*999)
-                  CALL FIELD_INTERPOLATED_POINT_METRICS_CALCULATE(COORDINATE_JACOBIAN_VOLUME_TYPE, &
-                    & INTERPOLATED_POINT_METRICS(FIELD_U_VARIABLE_TYPE)%PTR,ERR,ERROR,*999)
-                  ELEMENT_VOLUME=ELEMENT_VOLUME+W*INTERPOLATED_POINT_METRICS(FIELD_U_VARIABLE_TYPE)%PTR%JACOBIAN
-                ENDDO !ng
-                FIELD%GEOMETRIC_FIELD_PARAMETERS%VOLUMES(ne)=ELEMENT_VOLUME
-              ENDDO !ne
+              !Loop over the elements  
+              SELECT CASE(BASIS%TYPE)
+              CASE(BASIS_LAGRANGE_HERMITE_TP_TYPE)
+                DO ne=1,FIELD%DECOMPOSITION%TOPOLOGY%ELEMENTS%NUMBER_OF_ELEMENTS
+                  CALL FIELD_INTERPOLATION_PARAMETERS_ELEMENT_GET(FIELD_VALUES_SET_TYPE,ne, &
+                    & INTERPOLATION_PARAMETERS(FIELD_U_VARIABLE_TYPE)%PTR,ERR,ERROR,*999)
+                  ELEMENT_VOLUME=0.0_DP
+                  DO ng=1,numberGaussPoints
+                    XI(1:3)=XIG(1:3,ng)
+                    W=WIG(ng)
+                    CALL FIELD_INTERPOLATE_XI(FIRST_PART_DERIV,XI,INTERPOLATED_POINT(FIELD_U_VARIABLE_TYPE)%PTR,ERR,ERROR,*999)
+                    CALL FIELD_INTERPOLATED_POINT_METRICS_CALCULATE(COORDINATE_JACOBIAN_VOLUME_TYPE, &
+                      & INTERPOLATED_POINT_METRICS(FIELD_U_VARIABLE_TYPE)%PTR,ERR,ERROR,*999)
+                    ELEMENT_VOLUME=ELEMENT_VOLUME+W*INTERPOLATED_POINT_METRICS(FIELD_U_VARIABLE_TYPE)%PTR%JACOBIAN
+                  ENDDO !ng
+                  FIELD%GEOMETRIC_FIELD_PARAMETERS%VOLUMES(ne)=ELEMENT_VOLUME
+                ENDDO !ne
+              CASE(BASIS_SIMPLEX_TYPE)
+                DO ne=1,FIELD%DECOMPOSITION%TOPOLOGY%ELEMENTS%NUMBER_OF_ELEMENTS
+                  CALL FIELD_INTERPOLATION_PARAMETERS_ELEMENT_GET(FIELD_VALUES_SET_TYPE,ne, &
+                    & INTERPOLATION_PARAMETERS(FIELD_U_VARIABLE_TYPE)%PTR,ERR,ERROR,*999)
+                  ELEMENT_VOLUME=0.0_DP
+                  DO ng=1,numberGaussPoints
+                    XI(1:4)=XIG(1:4,ng)
+                    W=WIG(ng)
+                    CALL FIELD_INTERPOLATE_XI(FIRST_PART_DERIV,XI,INTERPOLATED_POINT(FIELD_U_VARIABLE_TYPE)%PTR,ERR,ERROR,*999)
+                    CALL FIELD_INTERPOLATED_POINT_METRICS_CALCULATE(COORDINATE_JACOBIAN_VOLUME_TYPE, &
+                      & INTERPOLATED_POINT_METRICS(FIELD_U_VARIABLE_TYPE)%PTR,ERR,ERROR,*999)
+                    ELEMENT_VOLUME=ELEMENT_VOLUME+W*INTERPOLATED_POINT_METRICS(FIELD_U_VARIABLE_TYPE)%PTR%JACOBIAN
+                  ENDDO !ng
+                  FIELD%GEOMETRIC_FIELD_PARAMETERS%VOLUMES(ne)=ELEMENT_VOLUME
+                ENDDO !ne
+              END SELECT
 
               CALL FIELD_INTERPOLATED_POINTS_METRICS_FINALISE(INTERPOLATED_POINT_METRICS,ERR,ERROR,*999)
               CALL FIELD_INTERPOLATED_POINTS_FINALISE(INTERPOLATED_POINT,ERR,ERROR,*999)

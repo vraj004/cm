@@ -790,14 +790,13 @@ CONTAINS
       IF(ERR/=0) CALL FLAG_ERROR("Could not allocate gauss point coordinates",ERR,ERROR,*999)
       ALLOCATE(XI_MATRIX(MAX_GAUSS,MAX_GAUSS,MAX_GAUSS,numCoords),STAT=ERR)
       IF(ERR/=0) CALL FLAG_ERROR("Could not allocate XI matrix",ERR,ERROR,*999)
-      ALLOCATE(gaussPoints(numCoords,MAX_GAUSS),STAT=ERR)
-      IF(ERR/=0) CALL FLAG_ERROR("Could not allocate weights",ERR,ERROR,*999)
-      ALLOCATE(gaussWeights(MAX_GAUSS),STAT=ERR)
-      IF(ERR/=0) CALL FLAG_ERROR("Could not allocate weights",ERR,ERROR,*999)
 
       SELECT CASE(basis%TYPE)
       CASE(BASIS_LAGRANGE_HERMITE_TP_TYPE)
-
+        ALLOCATE(gaussPoints(numCoords,MAX_GAUSS),STAT=ERR)
+        IF(ERR/=0) CALL FLAG_ERROR("Could not allocate weights",ERR,ERROR,*999)
+        ALLOCATE(gaussWeights(MAX_GAUSS),STAT=ERR)
+        IF(ERR/=0) CALL FLAG_ERROR("Could not allocate weights",ERR,ERROR,*999)
         DO nj=1,numCoords
           CALL GAUSS_LEGENDRE(order,0.0_DP,1.0_DP,XICOORDS(1:order,nj),W(1:order,nj),err,error,*999)
           IF(err/=0) GOTO 999
@@ -824,6 +823,11 @@ CONTAINS
         ELSE
           number_of_vertices=4
         ENDIF
+        ALLOCATE(gaussPoints(number_of_vertices,MAX_GAUSS),STAT=ERR)
+        IF(ERR/=0) CALL FLAG_ERROR("Could not allocate weights",ERR,ERROR,*999)
+        ALLOCATE(gaussWeights(MAX_GAUSS),STAT=ERR)
+        IF(ERR/=0) CALL FLAG_ERROR("Could not allocate weights",ERR,ERROR,*999)
+
         CALL GAUSS_SIMPLEX(order,number_of_vertices,numberGaussPoints,gaussPoints,gaussWeights,err,error,*999)
       CASE DEFAULT
         LOCAL_ERROR="Basis type "// &
@@ -5770,8 +5774,7 @@ CONTAINS
     TYPE(VARYING_STRING) :: LOCAL_ERROR
     
     CALL ENTERS("GAUSS_SIMPLEX",ERR,ERROR,*999)
-    WRITE(*,*) NUMBER_OF_VERTICES
-    IF(SIZE(X,1)>=(NUMBER_OF_VERTICES-1)) THEN
+    IF(SIZE(X,1)>=(NUMBER_OF_VERTICES)) THEN
       SELECT CASE(NUMBER_OF_VERTICES)
       CASE(2)
         !Line
