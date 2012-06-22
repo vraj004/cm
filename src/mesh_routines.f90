@@ -9117,13 +9117,14 @@ CONTAINS
 
     !>Gets the surround elements for a given node in a decomposition of a mesh. \see OPENCMISS::CMISSDecomposition_NodeSurroundElementsGet
   SUBROUTINE DECOMPOSITION_NODE_SURROUNDING_ELEMENTS_GET(DECOMPOSITION,USER_NODE_NUMBER,MESH_COMPONENT_NUMBER, &
-    & SURROUNDING_ELEMENTS,ERR,ERROR,*)
+    & SURROUNDING_ELEMENTS,numberSurroundingElements,ERR,ERROR,*)
 
     !Argument variables
     TYPE(DECOMPOSITION_TYPE), POINTER :: DECOMPOSITION !<A pointer to the decomposition to find the node domain from
     INTEGER(INTG), INTENT(IN) :: USER_NODE_NUMBER !<The global node number to find the domain for.
     INTEGER(INTG), INTENT(IN) :: MESH_COMPONENT_NUMBER !<The mesh component number to get the domain for.
-    INTEGER(INTG), POINTER, INTENT(OUT) :: SURROUNDING_ELEMENTS(:) !<On return, the number of surrounding elements for the global node number.
+    INTEGER(INTG), INTENT(IN) :: numberSurroundingElements !<The number of surrounding elements to define the size of SURROUNDING_ELEMENTS array>
+    INTEGER(INTG), INTENT(OUT) :: SURROUNDING_ELEMENTS(numberSurroundingElements) !<On return, the number of surrounding elements for the global node number.
     INTEGER(INTG), INTENT(OUT) :: ERR !<The error code
     TYPE(VARYING_STRING), INTENT(OUT) :: ERROR !<The error string
     !Local Variables`
@@ -9135,6 +9136,8 @@ CONTAINS
     TYPE(TREE_NODE_TYPE), POINTER :: TREE_NODE
     TYPE(MESH_NODES_TYPE), POINTER :: MESH_NODES
     TYPE(DOMAIN_TYPE), POINTER :: MESH_DOMAIN
+    INTEGER(INTG) :: NUMBER_SURROUNDING_ELEMENTS
+    INTEGER(INTG) :: SURROUNDING_ELEMENTS_SIZE
 
     CALL ENTERS("DECOMPOSITION_NODE_NUMBER_SURROUNDING_ELEMENTS_GET",ERR,ERROR,*999)
 
@@ -9167,10 +9170,20 @@ CONTAINS
                               IF(ASSOCIATED(TREE_NODE)) THEN
                                 CALL TREE_NODE_VALUE_GET(DOMAIN_TOPOLOGY%NODES%NODES_TREE,TREE_NODE, & 
                                   & DOMAIN_LOCAL_NODE_NUMBER,ERR,ERROR,*999)
-                                ALLOCATE(SURROUNDING_ELEMENTS(DOMAIN_TOPOLOGY%NODES%NODES(DOMAIN_LOCAL_NODE_NUMBER) &
-                                  & %NUMBER_OF_SURROUNDING_ELEMENTS),STAT=ERR)
-                                SURROUNDING_ELEMENTS => & 
-                                  & DOMAIN_TOPOLOGY%NODES%NODES(DOMAIN_LOCAL_NODE_NUMBER)%SURROUNDING_ELEMENTS
+                                !ALLOCATE(NEW_SURROUNDING_ELEMENTS(DOMAIN_TOPOLOGY%NODES%NODES(DOMAIN_LOCAL_NODE_NUMBER) &
+                                !  & %NUMBER_OF_SURROUNDING_ELEMENTS),STAT=ERR)
+                                !SURROUNDING_ELEMENTS => & 
+                                !  & DOMAIN_TOPOLOGY%NODES%NODES(DOMAIN_LOCAL_NODE_NUMBER)%SURROUNDING_ELEMENTS
+                                NUMBER_SURROUNDING_ELEMENTS=DOMAIN_TOPOLOGY%NODES%NODES(DOMAIN_LOCAL_NODE_NUMBER) & 
+                                  & %NUMBER_OF_SURROUNDING_ELEMENTS
+                                SURROUNDING_ELEMENTS_SIZE=SIZE(SURROUNDING_ELEMENTS)
+                                WRITE(*,*) SURROUNDING_ELEMENTS_SIZE
+                                IF(NUMBER_SURROUNDING_ELEMENTS.EQ.SURROUNDING_ELEMENTS_SIZE) THEN
+                                  SURROUNDING_ELEMENTS=DOMAIN_TOPOLOGY%NODES%NODES(DOMAIN_LOCAL_NODE_NUMBER)%SURROUNDING_ELEMENTS
+                                ELSE
+                                  CALL FLAG_ERROR("Size of passed in array does not match calculated array", & 
+                                    & ERR,ERROR,*999) 
+                                ENDIF                                 
                               ELSE
                                 CALL FLAG_ERROR("Decomposition domain node does for corresponding user node not found", &
                                   & ERR,ERROR,*999)
