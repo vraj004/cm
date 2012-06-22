@@ -707,7 +707,6 @@ CONTAINS
                       & METRICS%DX_DXI(2,mi)*METRICS%DX_DXI(2,ni)+ &
                       & METRICS%DX_DXI(3,mi)*METRICS%DX_DXI(3,ni)
                   ENDDO !ni
-                WRITE(*,*) METRICS%DX_DXI(mi,1),METRICS%DX_DXI(mi,2),METRICS%DX_DXI(mi,3)
                 ENDDO !mi
               CASE DEFAULT
                 LOCAL_ERROR=TRIM(NUMBER_TO_VSTRING(METRICS%NUMBER_OF_X_DIMENSIONS,"*",ERR,ERROR))// &

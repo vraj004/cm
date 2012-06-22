@@ -9903,7 +9903,7 @@ CONTAINS
                             IF(ERR/=0) CALL FLAG_ERROR("Could not allocate XIG matrix",ERR,ERROR,*999)
                             ALLOCATE(WIG(MAX_GAUSS),STAT=ERR)
                             IF(ERR/=0) CALL FLAG_ERROR("Could not allocate W matrix",ERR,ERROR,*999)
-                            CALL BASIS_GAUSS_POINTS_CALCULATE(BASIS,5,3,numberGaussPoints,XIG,WIG,ERR,ERROR,*999)
+                            CALL BASIS_GAUSS_POINTS_CALCULATE(BASIS,4,3,numberGaussPoints,XIG,WIG,ERR,ERROR,*999)
                             WRITE(*,*) numberGaussPoints
                             DO i=1,numberGaussPoints
                               WRITE(*,*) WIG(i)
