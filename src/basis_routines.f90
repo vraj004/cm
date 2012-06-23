@@ -763,13 +763,13 @@ CONTAINS
       SELECT CASE(numCoords)
       CASE(1)
         NUM_GAUSS_1=order
-        NUM_GAUSS_2=0
-        NUM_GAUSS_3=0
+        NUM_GAUSS_2=1
+        NUM_GAUSS_3=1
         MAX_GAUSS=order
       CASE(2)
         NUM_GAUSS_1=order
         NUM_GAUSS_2=order
-        NUM_GAUSS_3=0
+        NUM_GAUSS_3=1
         MAX_GAUSS=order*order
       CASE(3)
         NUM_GAUSS_1=order
@@ -802,6 +802,7 @@ CONTAINS
           IF(err/=0) GOTO 999
         ENDDO
         !Form gauss point array for lagrange hermite type.
+        numberGaussPoints=0
         DO k=1,NUM_GAUSS_3
           DO j=1,NUM_GAUSS_2
             DO i=1,NUM_GAUSS_1
@@ -812,6 +813,7 @@ CONTAINS
               ng=i+(j-1+(k-1)*NUM_GAUSS_2)*NUM_GAUSS_1
               gaussWeights(ng)=W(i,1)*W(j,2)*W(k,3)
               gaussPoints(1:numCoords,ng)=XI(1:numCoords)
+              numberGaussPoints=numberGaussPoints+1
             ENDDO
           ENDDO
         ENDDO
@@ -6321,7 +6323,7 @@ CONTAINS
               X(3,11)=L1_BETA
               X(4,11)=L2_BETA
               W(11)=W_BETA
-            ELSE
+             ELSE
               LOCAL_ERROR="The first dimension of the W array is "//TRIM(NUMBER_TO_VSTRING(SIZE(W,1),"*",ERR,ERROR))// &
                 & " and it must be >="//TRIM(NUMBER_TO_VSTRING(N,"*",ERR,ERROR))
               CALL FLAG_ERROR(LOCAL_ERROR,ERR,ERROR,*999)
