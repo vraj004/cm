@@ -5907,7 +5907,7 @@ CONTAINS
               X(1,1)=L_C
               X(2,1)=L_C
               X(3,1)=L_C
-              W(1)=W_C
+              W(1)=W_C/2.0_DP
             ELSE
               LOCAL_ERROR="The first dimension of the W array is "//TRIM(NUMBER_TO_VSTRING(SIZE(W,1),"*",ERR,ERROR))// &
                 & " and it must be >="//TRIM(NUMBER_TO_VSTRING(N,"*",ERR,ERROR))
@@ -5931,17 +5931,17 @@ CONTAINS
               X(1,1)=L1_ALPHA_1
               X(2,1)=L2_ALPHA_1
               X(3,1)=L3_ALPHA_1
-              W(1)=W_ALPHA_1
+              W(1)=W_ALPHA_1/2.0_DP
               !Gauss point 2
               X(1,2)=L3_ALPHA_1
               X(2,2)=L1_ALPHA_1
               X(3,2)=L2_ALPHA_1
-              W(2)=W_ALPHA_1
+              W(2)=W_ALPHA_1/2.0_DP
               !Gauss point 3
               X(1,3)=L2_ALPHA_1
               X(2,3)=L3_ALPHA_1
               X(3,3)=L1_ALPHA_1
-              W(3)=W_ALPHA_1
+              W(3)=W_ALPHA_1/2.0_DP
             ELSE
               LOCAL_ERROR="The first dimension of the W array is "//TRIM(NUMBER_TO_VSTRING(SIZE(W,1),"*",ERR,ERROR))// &
                 & " and it must be >="//TRIM(NUMBER_TO_VSTRING(N,"*",ERR,ERROR))
@@ -5969,22 +5969,22 @@ CONTAINS
               X(1,1)=L_C
               X(2,1)=L_C
               X(3,1)=L_C
-              W(1)=W_C
+              W(1)=W_C/2.0_DP
               !Gauss point 2
               X(1,2)=L1_ALPHA_1
               X(2,2)=L2_ALPHA_1
               X(3,2)=L3_ALPHA_1
-              W(2)=W_ALPHA_1
+              W(2)=W_ALPHA_1/2.0_DP
               !Gauss point 3
               X(1,3)=L3_ALPHA_1
               X(2,3)=L1_ALPHA_1
               X(3,3)=L2_ALPHA_1
-              W(3)=W_ALPHA_1
+              W(3)=W_ALPHA_1/2.0_DP
               !Gauss point 4
               X(1,4)=L2_ALPHA_1
               X(2,4)=L3_ALPHA_1
               X(3,4)=L1_ALPHA_1
-              W(4)=W_ALPHA_1
+              W(4)=W_ALPHA_1/2.0_DP
             ELSE
               LOCAL_ERROR="The first dimension of the W array is "//TRIM(NUMBER_TO_VSTRING(SIZE(W,1),"*",ERR,ERROR))// &
                 & " and it must be >="//TRIM(NUMBER_TO_VSTRING(N,"*",ERR,ERROR))
@@ -6013,32 +6013,32 @@ CONTAINS
               X(1,1)=L1_ALPHA_1
               X(2,1)=L2_ALPHA_1
               X(3,1)=L3_ALPHA_1
-              W(1)=W_ALPHA_1
+              W(1)=W_ALPHA_1/2.0_DP
               !Gauss point 2
               X(1,2)=L3_ALPHA_1
               X(2,2)=L1_ALPHA_1
               X(3,2)=L2_ALPHA_1
-              W(2)=W_ALPHA_1
+              W(2)=W_ALPHA_1/2.0_DP
               !Gauss point 3
               X(1,3)=L2_ALPHA_1
               X(2,3)=L3_ALPHA_1
               X(3,3)=L1_ALPHA_1
-              W(3)=W_ALPHA_1
+              W(3)=W_ALPHA_1/2.0_DP
               !Gauss point 4
               X(1,4)=L1_ALPHA_2
               X(2,4)=L2_ALPHA_2
               X(3,4)=L3_ALPHA_2
-              W(4)=W_ALPHA_2
+              W(4)=W_ALPHA_2/2.0_DP
               !Gauss point 5
               X(1,5)=L3_ALPHA_2
               X(2,5)=L1_ALPHA_2
               X(3,5)=L2_ALPHA_2
-              W(5)=W_ALPHA_2
+              W(5)=W_ALPHA_2/2.0_DP
               !Gauss point 6
               X(1,6)=L2_ALPHA_2
               X(2,6)=L3_ALPHA_2
               X(3,6)=L1_ALPHA_2
-              W(6)=W_ALPHA_2
+              W(6)=W_ALPHA_2/2.0_DP
             ELSE
               LOCAL_ERROR="The first dimension of the W array is "//TRIM(NUMBER_TO_VSTRING(SIZE(W,1),"*",ERR,ERROR))// &
                 & " and it must be >="//TRIM(NUMBER_TO_VSTRING(N,"*",ERR,ERROR))
@@ -6071,37 +6071,37 @@ CONTAINS
               X(1,1)=L_C
               X(2,1)=L_C
               X(3,1)=L_C
-              W(1)=W_C
+              W(1)=W_C/2.0_DP
               !Gauss point 2
               X(1,2)=L1_ALPHA_1
               X(2,2)=L2_ALPHA_1
               X(3,2)=L3_ALPHA_1
-              W(2)=W_ALPHA_1
+              W(2)=W_ALPHA_1/2.0_DP
               !Gauss point 3
               X(1,3)=L3_ALPHA_1
               X(2,3)=L1_ALPHA_1
               X(3,3)=L2_ALPHA_1
-              W(3)=W_ALPHA_1
+              W(3)=W_ALPHA_1/2.0_DP
               !Gauss point 4
               X(1,4)=L2_ALPHA_1
               X(2,4)=L3_ALPHA_1
               X(3,4)=L1_ALPHA_1
-              W(4)=W_ALPHA_1
+              W(4)=W_ALPHA_1/2.0_DP
               !Gauss point 5
               X(1,5)=L1_ALPHA_2
               X(2,5)=L2_ALPHA_2
               X(3,5)=L3_ALPHA_2
-              W(5)=W_ALPHA_2
+              W(5)=W_ALPHA_2/2.0_DP
               !Gauss point 6
               X(1,6)=L3_ALPHA_2
               X(2,6)=L1_ALPHA_2
               X(3,6)=L2_ALPHA_2
-              W(6)=W_ALPHA_2
+              W(6)=W_ALPHA_2/2.0_DP
               !Gauss point 7
               X(1,7)=L2_ALPHA_2
               X(2,7)=L3_ALPHA_2
               X(3,7)=L1_ALPHA_2
-              W(7)=W_ALPHA_2
+              W(7)=W_ALPHA_2/2.0_DP
             ELSE
               LOCAL_ERROR="The first dimension of the W array is "//TRIM(NUMBER_TO_VSTRING(SIZE(W,1),"*",ERR,ERROR))// &
                 & " and it must be >="//TRIM(NUMBER_TO_VSTRING(N,"*",ERR,ERROR))
@@ -6130,7 +6130,7 @@ CONTAINS
               X(1,1)=L_C
               X(2,1)=L_C
               X(3,1)=L_C
-              W(1)=W_C
+              W(1)=W_C/6.0_DP
             ELSE
               LOCAL_ERROR="The first dimension of the W array is "//TRIM(NUMBER_TO_VSTRING(SIZE(W,1),"*",ERR,ERROR))// &
                 & " and it must be >="//TRIM(NUMBER_TO_VSTRING(N,"*",ERR,ERROR))
@@ -6156,25 +6156,25 @@ CONTAINS
               X(2,1)=L2_ALPHA_1
               X(3,1)=L3_ALPHA_1
               X(4,1)=L4_ALPHA_1
-              W(1)=W_ALPHA_1
+              W(1)=W_ALPHA_1/6.0_DP
               !Gauss point 2
               X(1,2)=L4_ALPHA_1
               X(2,2)=L1_ALPHA_1
               X(3,2)=L2_ALPHA_1
               X(4,2)=L3_ALPHA_1
-              W(2)=W_ALPHA_1
+              W(2)=W_ALPHA_1/6.0_DP
               !Gauss point 3
               X(1,3)=L3_ALPHA_1
               X(2,3)=L4_ALPHA_1
               X(3,3)=L1_ALPHA_1
               X(4,3)=L2_ALPHA_1
-              W(3)=W_ALPHA_1
+              W(3)=W_ALPHA_1/6.0_DP
               !Gauss point 4
               X(1,4)=L2_ALPHA_1
               X(2,4)=L3_ALPHA_1
               X(3,4)=L4_ALPHA_1
               X(4,4)=L1_ALPHA_1
-              W(4)=W_ALPHA_1
+              W(4)=W_ALPHA_1/6.0_DP
             ELSE
               LOCAL_ERROR="The first dimension of the W array is "//TRIM(NUMBER_TO_VSTRING(SIZE(W,1),"*",ERR,ERROR))// &
                 & " and it must be >="//TRIM(NUMBER_TO_VSTRING(N,"*",ERR,ERROR))
@@ -6204,31 +6204,31 @@ CONTAINS
               X(2,1)=L_C
               X(3,1)=L_C
               X(4,1)=L_C
-              W(1)=W_C
+              W(1)=W_C/6.0_DP
               !Gauss point 2
               X(1,2)=L1_ALPHA_1
               X(2,2)=L2_ALPHA_1
               X(3,2)=L3_ALPHA_1
               X(4,2)=L4_ALPHA_1
-              W(2)=W_ALPHA_1
+              W(2)=W_ALPHA_1/6.0_DP
               !Gauss point 3
               X(1,3)=L4_ALPHA_1
               X(2,3)=L1_ALPHA_1
               X(3,3)=L2_ALPHA_1
               X(4,3)=L3_ALPHA_1
-              W(3)=W_ALPHA_1
+              W(3)=W_ALPHA_1/6.0_DP
               !Gauss point 4
               X(1,4)=L3_ALPHA_1
               X(2,4)=L4_ALPHA_1
               X(3,4)=L1_ALPHA_1
               X(4,4)=L2_ALPHA_1
-              W(4)=W_ALPHA_1
+              W(4)=W_ALPHA_1/6.0_DP
               !Gauss point 5
               X(1,5)=L2_ALPHA_1
               X(2,5)=L3_ALPHA_1
               X(3,5)=L4_ALPHA_1
               X(4,5)=L1_ALPHA_1
-              W(5)=W_ALPHA_1
+              W(5)=W_ALPHA_1/6.0_DP
             ELSE
               LOCAL_ERROR="The first dimension of the W array is "//TRIM(NUMBER_TO_VSTRING(SIZE(W,1),"*",ERR,ERROR))// &
                 & " and it must be >="//TRIM(NUMBER_TO_VSTRING(N,"*",ERR,ERROR))
@@ -6262,67 +6262,67 @@ CONTAINS
               X(2,1)=L_C
               X(3,1)=L_C
               X(4,1)=L_C
-              W(1)=W_C
+              W(1)=W_C/6.0_DP
               !Gauss point 2
               X(1,2)=L1_ALPHA_1
               X(2,2)=L2_ALPHA_1
               X(3,2)=L3_ALPHA_1
               X(4,2)=L4_ALPHA_1
-              W(2)=W_ALPHA_1
+              W(2)=W_ALPHA_1/6.0_DP
               !Gauss point 3
               X(1,3)=L4_ALPHA_1
               X(2,3)=L1_ALPHA_1
               X(3,3)=L2_ALPHA_1
               X(4,3)=L3_ALPHA_1
-              W(3)=W_ALPHA_1
+              W(3)=W_ALPHA_1/6.0_DP
               !Gauss point 4
               X(1,4)=L3_ALPHA_1
               X(2,4)=L4_ALPHA_1
               X(3,4)=L1_ALPHA_1
               X(4,4)=L2_ALPHA_1
-              W(4)=W_ALPHA_1
+              W(4)=W_ALPHA_1/6.0_DP
               !Gauss point 5
               X(1,5)=L2_ALPHA_1
               X(2,5)=L3_ALPHA_1
               X(3,5)=L4_ALPHA_1
               X(4,5)=L1_ALPHA_1
-              W(5)=W_ALPHA_1
+              W(5)=W_ALPHA_1/6.0_DP
               !Gauss point 6
               X(1,6)=L1_BETA
               X(2,6)=L2_BETA
               X(3,6)=L3_BETA
               X(4,6)=L4_BETA
-              W(6)=W_BETA
+              W(6)=W_BETA/6.0_DP
               !Gauss point 7
               X(1,7)=L1_BETA
               X(2,7)=L3_BETA
               X(3,7)=L2_BETA
               X(4,7)=L4_BETA
-              W(7)=W_BETA
+              W(7)=W_BETA/6.0_DP
               !Gauss point 8
               X(1,8)=L1_BETA
               X(2,8)=L3_BETA
               X(3,8)=L4_BETA
               X(4,8)=L2_BETA
-              W(8)=W_BETA
+              W(8)=W_BETA/6.0_DP
               !Gauss point 9
               X(1,9)=L3_BETA
               X(2,9)=L1_BETA
               X(3,9)=L2_BETA
               X(4,9)=L4_BETA
-              W(9)=W_BETA
+              W(9)=W_BETA/6.0_DP
               !Gauss point 10
               X(1,10)=L3_BETA
               X(2,10)=L1_BETA
               X(3,10)=L4_BETA
               X(4,10)=L2_BETA
-              W(10)=W_BETA
+              W(10)=W_BETA/6.0_DP
               !Gauss point 11
               X(1,11)=L3_BETA
               X(2,11)=L4_BETA
               X(3,11)=L1_BETA
               X(4,11)=L2_BETA
-              W(11)=W_BETA
+              W(11)=W_BETA/6.0_DP
              ELSE
               LOCAL_ERROR="The first dimension of the W array is "//TRIM(NUMBER_TO_VSTRING(SIZE(W,1),"*",ERR,ERROR))// &
                 & " and it must be >="//TRIM(NUMBER_TO_VSTRING(N,"*",ERR,ERROR))
@@ -6366,85 +6366,85 @@ CONTAINS
               X(2,1)=L2_ALPHA_1
               X(3,1)=L3_ALPHA_1
               X(4,1)=L4_ALPHA_1
-              W(1)=W_ALPHA_1
+              W(1)=W_ALPHA_1/6.0_DP
               !Gauss point 2
               X(1,2)=L4_ALPHA_1
               X(2,2)=L1_ALPHA_1
               X(3,2)=L2_ALPHA_1
               X(4,2)=L3_ALPHA_1
-              W(2)=W_ALPHA_1
+              W(2)=W_ALPHA_1/6.0_DP
               !Gauss point 3
               X(1,3)=L3_ALPHA_1
               X(2,3)=L4_ALPHA_1
               X(3,3)=L1_ALPHA_1
               X(4,3)=L2_ALPHA_1
-              W(3)=W_ALPHA_1
+              W(3)=W_ALPHA_1/6.0_DP
               !Gauss point 4
               X(1,4)=L2_ALPHA_1
               X(2,4)=L3_ALPHA_1
               X(3,4)=L4_ALPHA_1
               X(4,4)=L1_ALPHA_1
-              W(4)=W_ALPHA_1
+              W(4)=W_ALPHA_1/6.0_DP
               !Gauss point 5
               X(1,5)=L1_ALPHA_2
               X(2,5)=L2_ALPHA_2
               X(3,5)=L3_ALPHA_2
               X(4,5)=L4_ALPHA_2
-              W(5)=W_ALPHA_2
+              W(5)=W_ALPHA_2/6.0_DP
               !Gauss point 6
               X(1,6)=L4_ALPHA_2
               X(2,6)=L1_ALPHA_2
               X(3,6)=L2_ALPHA_2
               X(4,6)=L3_ALPHA_2
-              W(6)=W_ALPHA_2
+              W(6)=W_ALPHA_2/6.0_DP
               !Gauss point 7
               X(1,7)=L3_ALPHA_2
               X(2,7)=L4_ALPHA_2
               X(3,7)=L1_ALPHA_2
               X(4,7)=L2_ALPHA_2
-              W(7)=W_ALPHA_2
+              W(7)=W_ALPHA_2/6.0_DP
               !Gauss point 8
               X(1,8)=L2_ALPHA_2
               X(2,8)=L3_ALPHA_2
               X(3,8)=L4_ALPHA_2
               X(4,8)=L1_ALPHA_2
-              W(8)=W_ALPHA_2
+              W(8)=W_ALPHA_2/6.0_DP
               !Gauss point 9
               X(1,9)=L1_BETA
               X(2,9)=L2_BETA
               X(3,9)=L3_BETA
               X(4,9)=L4_BETA
-              W(9)=W_BETA
+              W(9)=W_BETA/6.0_DP
               !Gauss point 10
               X(1,10)=L1_BETA
               X(2,10)=L3_BETA
               X(3,10)=L2_BETA
               X(4,10)=L4_BETA
-              W(10)=W_BETA
+              W(10)=W_BETA/6.0_DP
               !Gauss point 11
               X(1,11)=L1_BETA
               X(2,11)=L3_BETA
               X(3,11)=L4_BETA
               X(4,11)=L2_BETA
-              W(11)=W_BETA
+              W(11)=W_BETA/6.0_DP
               !Gauss point 12
               X(1,12)=L3_BETA
               X(2,12)=L1_BETA
               X(3,12)=L2_BETA
               X(4,12)=L4_BETA
-              W(12)=W_BETA
+              W(12)=W_BETA/6.0_DP
               !Gauss point 13
               X(1,13)=L3_BETA
               X(2,13)=L1_BETA
               X(3,13)=L4_BETA
               X(4,13)=L2_BETA
-              W(13)=W_BETA
+              W(13)=W_BETA/6.0_DP
               !Gauss point 14
               X(1,14)=L3_BETA
               X(2,14)=L4_BETA
               X(3,14)=L1_BETA
               X(4,14)=L2_BETA
-              W(14)=W_BETA
+              W(14)=W_BETA/6.0_DP
              ELSE
               LOCAL_ERROR="The first dimension of the W array is "//TRIM(NUMBER_TO_VSTRING(SIZE(W,1),"*",ERR,ERROR))// &
                 & " and it must be >="//TRIM(NUMBER_TO_VSTRING(N,"*",ERR,ERROR))
