@@ -2516,7 +2516,14 @@ CONTAINS
                     ENDIF
                   ENDIF
                 CASE(EQUATIONS_NONLINEAR)
-                  CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
+                  IF(NUMBER_OF_LINEAR_EQUATIONS_MATRICES<0.OR. &
+                    & NUMBER_OF_LINEAR_EQUATIONS_MATRICES>FIELD_NUMBER_OF_VARIABLE_TYPES-2) THEN
+                    LOCAL_ERROR="The specified number of linear matrices of "// &
+                      & TRIM(NUMBER_TO_VSTRING(NUMBER_OF_LINEAR_EQUATIONS_MATRICES,"*",ERR,ERROR))// &
+                      & ") is invalid. For dynamic non-linear problems the number must be between >= 0 and <= "// &
+                      & TRIM(NUMBER_TO_VSTRING(FIELD_NUMBER_OF_VARIABLE_TYPES-2,"*",ERR,ERROR))
+                    CALL FLAG_ERROR(LOCAL_ERROR,ERR,ERROR,*999)
+                  ENDIF
                 CASE DEFAULT
                   LOCAL_ERROR="The equations linearity type of "// &
                     & TRIM(NUMBER_TO_VSTRING(EQUATIONS%LINEARITY,"*",ERR,ERROR))//" is invalid."

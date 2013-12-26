@@ -107,6 +107,7 @@ MODULE PROBLEM_CONSTANTS
   INTEGER(INTG), PARAMETER :: PROBLEM_MULTI_COMPARTMENT_TRANSPORT_TYPE=6 !<Problem type for the multi-compartment coupled transport, comprising either/or/both advection-diffusion & diffusion 
   INTEGER(INTG), PARAMETER :: PROBLEM_FINITE_ELASTICITY_FLUID_PRESSURE_TYPE=7
   INTEGER(INTG), PARAMETER :: PROBLEM_BIOELECTRIC_FINITE_ELASTICITY_TYPE=8
+  INTEGER(INTG), PARAMETER :: PROBLEM_COUPLED_FINITEELASTIC_DARCY_TYPE=9 !<Problem type for tightly coupled finite elasticity and darcy
   !Problem subtypes
   INTEGER(INTG), PARAMETER :: PROBLEM_NO_SUBTYPE=0
   !Elasticity class
