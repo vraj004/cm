@@ -508,6 +508,7 @@ $(OBJECT_DIR)/coordinate_routines.o	:	$(SOURCE_DIR)/coordinate_routines.f90 \
 $(OBJECT_DIR)/coupled_finiteelastic_darcy_routines.o	:	$(SOURCE_DIR)/coupled_finiteelastic_darcy_routines.f90 \
 	$(OBJECT_DIR)/base_routines.o \
 	$(OBJECT_DIR)/basis_routines.o \
+        $(OBJECT_DIR)/boundary_condition_routines.o \
 	$(OBJECT_DIR)/constants.o \
 	$(OBJECT_DIR)/control_loop_routines.o \
 	$(OBJECT_DIR)/distributed_matrix_vector.o \
@@ -520,6 +521,7 @@ $(OBJECT_DIR)/coupled_finiteelastic_darcy_routines.o	:	$(SOURCE_DIR)/coupled_fin
 	$(OBJECT_DIR)/input_output.o \
 	$(OBJECT_DIR)/iso_varying_string.o \
 	$(OBJECT_DIR)/kinds.o \
+        $(OBJECT_DIR)/maths.o \
 	$(OBJECT_DIR)/matrix_vector.o \
 	$(OBJECT_DIR)/problem_constants.o \
 	$(OBJECT_DIR)/solver_routines.o \
