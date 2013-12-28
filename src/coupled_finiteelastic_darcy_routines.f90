@@ -1388,11 +1388,31 @@ CONTAINS
                 ENDDO ! parameter_idx (residual vector loop)
               ELSEIF(DEPENDENT_COMPONENT_INTERPOLATION_TYPE==FIELD_ELEMENT_BASED_INTERPOLATION) THEN
                 !Will probably never be used
-                CALL FLAG_ERROR("Finite elasticity with element based interpolation is not implemented.",ERR,ERROR,*999)
+                CALL FLAG_ERROR("Finite elasticity-Darcy with element based interpolation is not implemented.",ERR,ERROR,*999)
               ENDIF
             ENDDO ! component_idx
 
-            !INCOMPRESSIBILITY CONSTRAING gradFLOW+J-1 = 0 
+            !CALCULATE div(U1,U2,U3) - net flow out of element
+            DARCY_VOL_INCREASE=0.0_CMISSDP
+            DO component_idx=(NUMBER_OF_DIMENSIONS+2),NUMBER_OF_COMPONENTS
+              DEPENDENT_COMPONENT_INTERPOLATION_TYPE=DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx)%INTERPOLATION_TYPE
+              IF(DEPENDENT_COMPONENT_INTERPOLATION_TYPE==FIELD_NODE_BASED_INTERPOLATION) THEN !node based
+                DEPENDENT_BASIS=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx)%DOMAIN%TOPOLOGY% &
+                  & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
+                NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS=DEPENDENT_BASIS%NUMBER_OF_ELEMENT_PARAMETERS
+                DO parameter_idx=1,NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS
+                  DARCY_VOL_INCREASE= &
+                    & DARCY_VOL_INCREASE+ &
+                    & GAUSS_WEIGHT*Jxxi*Jznu*DEPENDENT_INTERPOLATION_PARAMETERS%VALUES(parameter_idx,component_idx)&
+                    & DFDZ(parameter_idx,component_idx)
+                ENDDO ! parameter_idx (residual vector loop)
+              ELSEIF(DEPENDENT_COMPONENT_INTERPOLATION_TYPE==FIELD_ELEMENT_BASED_INTERPOLATION) THEN
+                !Will probably never be used
+                CALL FLAG_ERROR("Finite elastic-Darcy with element based interpolation is not implemented.",ERR,ERROR,*999)
+              ENDIF
+            ENDDO ! component_idx
+            
+            !INCOMPRESSIBILITY CONSTRAING divFLOW+J-1 = 0
             HYDROSTATIC_PRESSURE_COMPONENT=NUMBER_OF_DIMENSIONS+1
             DEPENDENT_COMPONENT_INTERPOLATION_TYPE=DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx)%INTERPOLATION_TYPE
             IF(DEPENDENT_COMPONENT_INTERPOLATION_TYPE==FIELD_NODE_BASED_INTERPOLATION) THEN !node based
@@ -1402,7 +1422,6 @@ CONTAINS
               NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS=COMPONENT_BASIS%NUMBER_OF_ELEMENT_PARAMETERS
               DO parameter_idx=1,NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS
                 element_dof_idx=element_dof_idx+1 
-                DARCY_VOL_INCREASE = 
                 NONLINEAR_MATRICES%ELEMENT_RESIDUAL%VECTOR(element_dof_idx)= &
                   & NONLINEAR_MATRICES%ELEMENT_RESIDUAL%VECTOR(element_dof_idx)+ &
                   & GAUSS_WEIGHT*Jxxi*COMPONENT_QUADRATURE_SCHEME%GAUSS_BASIS_FNS(parameter_idx,1,gauss_idx)* &
@@ -1412,8 +1431,24 @@ CONTAINS
               element_dof_idx=element_dof_idx+1
               NONLINEAR_MATRICES%ELEMENT_RESIDUAL%VECTOR(element_dof_idx)= &
                 & NONLINEAR_MATRICES%ELEMENT_RESIDUAL%VECTOR(element_dof_idx)+GAUSS_WEIGHT*Jxxi* &
-                & (Jznu-1.0_DP)
+                & (Jznu-1.0_DP+DARCY_VOL_INCREASE)
             ENDIF
+            !Set the nonlinear-residual vector values for the eqns related to velcoity components to zero
+            DO component_idx=(HYDROSTATIC_PRESSURE_COMPONENT+1),DEPENDENT_NUMBER_OF_COMPONENTS
+              DEPENDENT_COMPONENT_INTERPOLATION_TYPE=DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx)%INTERPOLATION_TYPE
+              IF(DEPENDENT_COMPONENT_INTERPOLATION_TYPE==FIELD_NODE_BASED_INTERPOLATION) THEN !node based
+                DEPENDENT_BASIS=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx)%DOMAIN%TOPOLOGY% &
+                  & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
+                NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS=DEPENDENT_BASIS%NUMBER_OF_ELEMENT_PARAMETERS
+                DO parameter_idx=1,NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS
+                  element_dof_idx=element_dof_idx+1
+                  NONLINEAR_MATRICES%ELEMENT_RESIDUAL%VECTOR(element_dof_idx)= 0.0_CMISSDP
+                ENDDO ! parameter_idx (residual vector loop)
+              ELSEIF(DEPENDENT_COMPONENT_INTERPOLATION_TYPE==FIELD_ELEMENT_BASED_INTERPOLATION) THEN
+                !Will probably never be used
+                CALL FLAG_ERROR("coupled Finite elasticity-Darcy with element based interpolation is not implemented.",ERR,ERROR,*999)
+              ENDIF
+            ENDDO ! component_idx
 
           ENDDO !gauss_idx
 
@@ -1429,7 +1464,7 @@ CONTAINS
             & " is not valid for a coupled-finite-elastic-darcy of a multi-physics problem class."
           CALL FLAG_ERROR(LOCAL_ERROR,ERR,ERROR,*999)
         END SELECT
-        !Gravity loading term
+        !Gravity loading term on the solid
         IF(ASSOCIATED(RHS_VECTOR)) THEN
           IF(ASSOCIATED(SOURCE_FIELD)) THEN
             IF(ASSOCIATED(MATERIALS_FIELD%VARIABLE_TYPE_MAP(FIELD_V_VARIABLE_TYPE)%PTR)) THEN
@@ -1480,7 +1515,129 @@ CONTAINS
     !DARCY FLUID DAMPING AND STIFFNESS TERMS
     !Grab material interpolation parameters for the solid mech properties variable type
     DARCY_MATERIALS_INTERPOLATION_PARAMETERS=>EQUATIONS%INTERPOLATION%MATERIALS_INTERP_PARAMETERS(FIELD_U1_VARIABLE_TYPE)%PTR
+    CALL FIELD_INTERPOLATION_PARAMETERS_ELEMENT_GET(FIELD_VALUES_SET_TYPE,ELEMENT_NUMBER, &
+      & DARCY_MATERIALS_INTERPOLATION_PARAMETERS,ERR,ERROR,*999)
+    DARCY_MATERIALS_INTERPOLATED_POINT=>EQUATIONS%INTERPOLATION%MATERIALS_INTERP_POINT(FIELD_U1_VARIABLE_TYPE)%PTR
 
+    IF(STIFFNESS_MATRIX%UPDATE_MATRIX.OR.DAMPING_MATRIX%UPDATE_MATRIX) THEN
+      !Loop over gauss points
+      DO ng=1,QUADRATURE_SCHEME%NUMBER_OF_GAUSS
+        GAUSS_WEIGHT=DEPENDENT_QUADRATURE_SCHEME%GAUSS_WEIGHTS(gauss_idx)
+          !Interpolate dependent, geometric, fibre and materials fields
+        CALL FIELD_INTERPOLATE_GAUSS(FIRST_PART_DERIV,BASIS_DEFAULT_QUADRATURE_SCHEME,gauss_idx, &
+          & DEPENDENT_INTERPOLATED_POINT,ERR,ERROR,*999)
+        CALL FIELD_INTERPOLATE_GAUSS(FIRST_PART_DERIV,BASIS_DEFAULT_QUADRATURE_SCHEME,gauss_idx, &
+          & GEOMETRIC_INTERPOLATED_POINT,ERR,ERROR,*999)
+        IF(ASSOCIATED(FIBRE_FIELD)) THEN
+          CALL FIELD_INTERPOLATE_GAUSS(FIRST_PART_DERIV,BASIS_DEFAULT_QUADRATURE_SCHEME,gauss_idx, &
+            & FIBRE_INTERPOLATED_POINT,ERR,ERROR,*999)
+        END IF
+        CALL FIELD_INTERPOLATE_GAUSS(NO_PART_DERIV,BASIS_DEFAULT_QUADRATURE_SCHEME,gauss_idx, &
+          & DARCY_MATERIALS_INTERPOLATED_POINT,ERR,ERROR,*999)
+        
+        !Calculate RWG.
+        RWG=EQUATIONS%INTERPOLATION%GEOMETRIC_INTERP_POINT_METRICS(FIELD_U_VARIABLE_TYPE)%PTR%JACOBIAN* &
+          & QUADRATURE_SCHEME%GAUSS_WEIGHTS(ng)
+        !Get the permeability, stored in the darcy material component
+        K = DARCY_MATERIALS_INTERPOLATED_POINT%VALUES(1,NO_PART_DERIV)
+
+            !Compute basis dPhi/dx terms
+            DO nj=1,GEOMETRIC_VARIABLE%NUMBER_OF_COMPONENTS
+              DO ms=1,DEPENDENT_BASIS%NUMBER_OF_ELEMENT_PARAMETERS
+                DPHIDX(nj,ms)=0.0_DP
+                DO ni=1,DEPENDENT_BASIS%NUMBER_OF_XI
+                  DPHIDX(nj,ms)=DPHIDX(nj,ms)+ &
+                    & QUADRATURE_SCHEME%GAUSS_BASIS_FNS(ms,PARTIAL_DERIVATIVE_FIRST_DERIVATIVE_MAP(ni),ng)* &
+                    & EQUATIONS%INTERPOLATION%GEOMETRIC_INTERP_POINT_METRICS(FIELD_U_VARIABLE_TYPE)%PTR%DXI_DX(ni,nj)
+                ENDDO !ni
+              ENDDO !ms
+            ENDDO !nj            
+            !Loop over field components
+            mhs=0          
+            DO mh=1,FIELD_VARIABLE%NUMBER_OF_COMPONENTS
+              !Loop over element rows
+              DO ms=1,DEPENDENT_BASIS%NUMBER_OF_ELEMENT_PARAMETERS
+                mhs=mhs+1
+                nhs=0
+                !Loop over element columns
+                DO nh=1,FIELD_VARIABLE%NUMBER_OF_COMPONENTS
+                  DO ns=1,DEPENDENT_BASIS%NUMBER_OF_ELEMENT_PARAMETERS
+                    nhs=nhs+1
+                    SUM=0.0_DP
+                    IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
+                      DO ni=1,GEOMETRIC_VARIABLE%NUMBER_OF_COMPONENTS
+                        DO nj=1,GEOMETRIC_VARIABLE%NUMBER_OF_COMPONENTS
+                          SUM=SUM+DIFFUSIVITY(ni,nj)*DPHIDX(ni,mhs)*DPHIDX(nj,nhs)
+                       ENDDO !nj
+                      ENDDO !ni
+                      STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(mhs,nhs)=STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(mhs,nhs)+(SUM*RWG)
+                    ENDIF
+                    IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
+                      DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(mhs,nhs)=DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(mhs,nhs)+ &
+                        & QUADRATURE_SCHEME%GAUSS_BASIS_FNS(ms,NO_PART_DERIV,ng)* &
+                        & QUADRATURE_SCHEME%GAUSS_BASIS_FNS(ns,NO_PART_DERIV,ng)*STORAGE_COEFFICIENT*RWG
+                    ENDIF
+                  ENDDO !ns
+                ENDDO !nh
+
+                IF(RHS_VECTOR%UPDATE_VECTOR) RHS_VECTOR%ELEMENT_VECTOR%VECTOR(mhs)=0.0_DP
+              ENDDO !ms
+            ENDDO !mh
+            IF(EQUATIONS_SET%SUBTYPE==EQUATIONS_SET_CONSTANT_REAC_DIFF_SUBTYPE) THEN
+              IF(SOURCE_VECTOR%UPDATE_VECTOR) THEN
+                C_PARAM=EQUATIONS%INTERPOLATION%SOURCE_INTERP_POINT(FIELD_U_VARIABLE_TYPE)%PTR%VALUES(1,NO_PART_DERIV)
+                mhs=0
+                DO mh=1,FIELD_VARIABLE%NUMBER_OF_COMPONENTS
+                !Loop over element rows
+                  DO ms=1,DEPENDENT_BASIS%NUMBER_OF_ELEMENT_PARAMETERS
+                    mhs=mhs+1
+                    SOURCE_VECTOR%ELEMENT_VECTOR%VECTOR(mhs)=SOURCE_VECTOR%ELEMENT_VECTOR%VECTOR(mhs)+ &
+                      & QUADRATURE_SCHEME%GAUSS_BASIS_FNS(ms,NO_PART_DERIV,ng)*C_PARAM*RWG
+                  ENDDO
+                ENDDO
+              ENDIF
+            ENDIF
+            IF(RHS_VECTOR%UPDATE_VECTOR) RHS_VECTOR%ELEMENT_VECTOR%VECTOR(mhs)=0.0_DP
+          ENDDO !ng
+        ENDIF
+        !Scale factor adjustment
+        IF(DEPENDENT_FIELD%SCALINGS%SCALING_TYPE/=FIELD_NO_SCALING) THEN
+          CALL FIELD_INTERPOLATION_PARAMETERS_SCALE_FACTORS_ELEM_GET(ELEMENT_NUMBER,EQUATIONS%INTERPOLATION% &
+            & DEPENDENT_INTERP_PARAMETERS(FIELD_VAR_TYPE)%PTR,ERR,ERROR,*999)
+          mhs=0          
+          DO mh=1,FIELD_VARIABLE%NUMBER_OF_COMPONENTS
+            !Loop over element rows
+            DO ms=1,DEPENDENT_BASIS%NUMBER_OF_ELEMENT_PARAMETERS
+              mhs=mhs+1                    
+              nhs=0
+              IF(STIFFNESS_MATRIX%UPDATE_MATRIX.OR.DAMPING_MATRIX%UPDATE_MATRIX) THEN
+                !Loop over element columns
+                DO nh=1,FIELD_VARIABLE%NUMBER_OF_COMPONENTS
+                  DO ns=1,DEPENDENT_BASIS%NUMBER_OF_ELEMENT_PARAMETERS
+                    nhs=nhs+1
+                    IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
+                      STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(mhs,nhs)=STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(mhs,nhs)* &
+                        & EQUATIONS%INTERPOLATION%DEPENDENT_INTERP_PARAMETERS(FIELD_VAR_TYPE)%PTR%SCALE_FACTORS(ms,mh)* &
+                        & EQUATIONS%INTERPOLATION%DEPENDENT_INTERP_PARAMETERS(FIELD_VAR_TYPE)%PTR%SCALE_FACTORS(ns,nh)
+                    ENDIF
+                    IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
+                      DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(mhs,nhs)=DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(mhs,nhs)* &
+                        & EQUATIONS%INTERPOLATION%DEPENDENT_INTERP_PARAMETERS(FIELD_VAR_TYPE)%PTR%SCALE_FACTORS(ms,mh)* &
+                        & EQUATIONS%INTERPOLATION%DEPENDENT_INTERP_PARAMETERS(FIELD_VAR_TYPE)%PTR%SCALE_FACTORS(ns,nh)
+                    ENDIF
+                  ENDDO !ns
+                ENDDO !nh
+              ENDIF
+              IF(RHS_VECTOR%UPDATE_VECTOR) RHS_VECTOR%ELEMENT_VECTOR%VECTOR(mhs)=RHS_VECTOR%ELEMENT_VECTOR%VECTOR(mhs)* &
+                & EQUATIONS%INTERPOLATION%DEPENDENT_INTERP_PARAMETERS(FIELD_VAR_TYPE)%PTR%SCALE_FACTORS(ms,mh)
+              IF(EQUATIONS_SET%SUBTYPE==EQUATIONS_SET_CONSTANT_REAC_DIFF_SUBTYPE) THEN
+                 IF(SOURCE_VECTOR%UPDATE_VECTOR) SOURCE_VECTOR%ELEMENT_VECTOR%VECTOR(mhs)= & 
+                    & SOURCE_VECTOR%ELEMENT_VECTOR%VECTOR(mhs)* &
+                    & EQUATIONS%INTERPOLATION%DEPENDENT_INTERP_PARAMETERS(FIELD_VAR_TYPE)%PTR%SCALE_FACTORS(ms,mh)
+              ENDIF
+            ENDDO !ms
+          ENDDO !mh
+        ENDIF    
     ELSE
       CALL FLAG_ERROR("Equations set is not associated.",ERR,ERROR,*999)
     ENDIF
