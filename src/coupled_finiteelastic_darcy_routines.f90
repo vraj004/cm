@@ -310,7 +310,7 @@ CONTAINS
                 END SELECT
               ELSE
                 !Check the user specified field
-                CALL FIELD_TYPE_CHECK(EQUATIONS_SET_SETUP%FIELD,FIELD_GENERAL_TYPE,ERR,ERROR,*999)
+                CALL FIELD_TYPE_CHECK(EQUATIONS_SET_SETUP%FIELD,FIELD_GEOMETRIC_GENERAL_TYPE,ERR,ERROR,*999)
                 CALL FIELD_DEPENDENT_TYPE_CHECK(EQUATIONS_SET_SETUP%FIELD,FIELD_DEPENDENT_TYPE,ERR,ERROR,*999)
                 CALL FIELD_NUMBER_OF_VARIABLES_CHECK(EQUATIONS_SET_SETUP%FIELD,2,ERR,ERROR,*999)
                 CALL FIELD_VARIABLE_TYPES_CHECK(EQUATIONS_SET_SETUP%FIELD, &
@@ -337,17 +337,17 @@ CONTAINS
                       & FIELD_NODE_BASED_INTERPOLATION,ERR,ERROR,*999)
                   ENDDO !component_idx
 
-                  !If solid hydrostatic pressure is driving Darcy flow, check that pressure uses node based interpolation
-                  CALL FIELD_COMPONENT_INTERPOLATION_CHECK(EQUATIONS_SET_SETUP%FIELD,FIELD_U_VARIABLE_TYPE,4, &
-                    & FIELD_NODE_BASED_INTERPOLATION,ERR,ERROR,*999)
-                  CALL FIELD_COMPONENT_INTERPOLATION_CHECK(EQUATIONS_SET_SETUP%FIELD,FIELD_DELUDELN_VARIABLE_TYPE,4, &
-                    & FIELD_NODE_BASED_INTERPOLATION,ERR,ERROR,*999)
+                  !hydrostatic pressure
+                  !CALL FIELD_COMPONENT_INTERPOLATION_CHECK(EQUATIONS_SET_SETUP%FIELD,FIELD_U_VARIABLE_TYPE,4, &
+                  !  & FIELD_NODE_BASED_INTERPOLATION,ERR,ERROR,*999)
+                  !CALL FIELD_COMPONENT_INTERPOLATION_CHECK(EQUATIONS_SET_SETUP%FIELD,FIELD_DELUDELN_VARIABLE_TYPE,4, &
+                  !  & FIELD_NODE_BASED_INTERPOLATION,ERR,ERROR,*999)
 
-                  !Darcy:
+                  !Darcy velocities
                   DO component_idx=NUMBER_OF_DIMENSIONS+2,NUMBER_OF_COMPONENTS
-                    CALL FIELD_COMPONENT_INTERPOLATION_CHECK(EQUATIONS_SET_SETUP%FIELD,FIELD_V_VARIABLE_TYPE,component_idx, &
+                    CALL FIELD_COMPONENT_INTERPOLATION_CHECK(EQUATIONS_SET_SETUP%FIELD,FIELD_U_VARIABLE_TYPE,component_idx, &
                       & FIELD_NODE_BASED_INTERPOLATION,ERR,ERROR,*999)
-                    CALL FIELD_COMPONENT_INTERPOLATION_CHECK(EQUATIONS_SET_SETUP%FIELD,FIELD_DELVDELN_VARIABLE_TYPE,component_idx, &
+                    CALL FIELD_COMPONENT_INTERPOLATION_CHECK(EQUATIONS_SET_SETUP%FIELD,FIELD_DELUDELN_VARIABLE_TYPE,component_idx, &
                       & FIELD_NODE_BASED_INTERPOLATION,ERR,ERROR,*999)
                   ENDDO !component_idx
 
@@ -428,6 +428,7 @@ CONTAINS
              CALL FLAG_ERROR(LOCAL_ERROR,ERR,ERROR,*999)
            END SELECT
           CASE(EQUATIONS_SET_SETUP_FINISH_ACTION)
+            NUMBER_OF_DIMENSIONS=EQUATIONS_SET%REGION%COORDINATE_SYSTEM%NUMBER_OF_DIMENSIONS
             IF(EQUATIONS_SET%INDEPENDENT%INDEPENDENT_FIELD_AUTO_CREATED) THEN
               CALL FIELD_CREATE_FINISH(EQUATIONS_SET%INDEPENDENT%INDEPENDENT_FIELD,ERR,ERROR,*999)
               ! initialize values for active contraction independent field. TODO: actual init for z, trpn, or flag to presolve
@@ -439,6 +440,21 @@ CONTAINS
                    & FIELD_VALUES_SET_TYPE,component_idx,0.0_DP,Err,ERROR,*999)
                 ENDDO
               ENDIF
+            ELSE !check user specified field
+              CALL FIELD_TYPE_CHECK(EQUATIONS_SET_SETUP%FIELD,FIELD_GENERAL_TYPE,ERR,ERROR,*999)
+              CALL FIELD_DEPENDENT_TYPE_CHECK(EQUATIONS_SET_SETUP%FIELD,FIELD_INDEPENDENT_TYPE,ERR,ERROR,*999)
+              CALL FIELD_NUMBER_OF_VARIABLES_CHECK(EQUATIONS_SET_SETUP%FIELD,1,ERR,ERROR,*999)
+              CALL FIELD_VARIABLE_TYPES_CHECK(EQUATIONS_SET_SETUP%FIELD, &
+                & (/FIELD_U_VARIABLE_TYPE/),ERR,ERROR,*999)
+              CALL FIELD_DIMENSION_CHECK(EQUATIONS_SET_SETUP%FIELD,FIELD_U_VARIABLE_TYPE,FIELD_VECTOR_DIMENSION_TYPE, &
+                & ERR,ERROR,*999)
+              CALL FIELD_DATA_TYPE_CHECK(EQUATIONS_SET_SETUP%FIELD,FIELD_U_VARIABLE_TYPE,FIELD_DP_TYPE,ERR,ERROR,*999)
+              CALL FIELD_NUMBER_OF_COMPONENTS_CHECK(EQUATIONS_SET_SETUP%FIELD,FIELD_U_VARIABLE_TYPE,NUMBER_OF_DIMENSIONS, &
+                & ERR,ERROR,*999)
+              DO component_idx=1,NUMBER_OF_DIMENSIONS
+                CALL FIELD_COMPONENT_INTERPOLATION_CHECK(EQUATIONS_SET_SETUP%FIELD,FIELD_U_VARIABLE_TYPE,component_idx, &
+                  & FIELD_GAUSS_POINT_BASED_INTERPOLATION,ERR,ERROR,*999)
+              ENDDO !component_idx
             ENDIF
           CASE DEFAULT
             LOCAL_ERROR="The action type of "//TRIM(NUMBER_TO_VSTRING(EQUATIONS_SET_SETUP%ACTION_TYPE,"*",ERR,ERROR))// &
@@ -774,7 +790,7 @@ CONTAINS
               ELSE
                 SELECT CASE(EQUATIONS%SPARSITY_TYPE)
                   CASE(EQUATIONS_MATRICES_FULL_MATRICES)
-                    CALL EQUATIONS_MATRICES_LINEAR_STORAGE_TYPE_SET(EQUATIONS_MATRICES, &
+                    CALL EQUATIONS_MATRICES_DYNAMIC_STORAGE_TYPE_SET(EQUATIONS_MATRICES, &
                       & (/DISTRIBUTED_MATRIX_BLOCK_STORAGE_TYPE,DISTRIBUTED_MATRIX_BLOCK_STORAGE_TYPE/),ERR,ERROR,*999)
                     CALL EQUATIONS_MATRICES_NONLINEAR_STORAGE_TYPE_SET(EQUATIONS_MATRICES,MATRIX_BLOCK_STORAGE_TYPE, &
                       & ERR,ERROR,*999)
@@ -1169,7 +1185,7 @@ CONTAINS
     INTEGER(INTG), INTENT(OUT) :: ERR !<The error code
     TYPE(VARYING_STRING), INTENT(OUT) :: ERROR !<The error string
     !Local Variables
-    TYPE(BASIS_TYPE), POINTER :: DEPENDENT_BASIS,COMPONENT_BASIS
+    TYPE(BASIS_TYPE), POINTER :: DEPENDENT_BASIS,COMPONENT_BASIS,COMPONENT_2_BASIS
     TYPE(BOUNDARY_CONDITIONS_VARIABLE_TYPE), POINTER :: BOUNDARY_CONDITIONS_VARIABLE
     TYPE(BOUNDARY_CONDITIONS_TYPE), POINTER :: BOUNDARY_CONDITIONS
     TYPE(EQUATIONS_TYPE), POINTER :: EQUATIONS
@@ -1184,7 +1200,7 @@ CONTAINS
     TYPE(FIELD_TYPE), POINTER :: DEPENDENT_FIELD,FIBRE_FIELD,GEOMETRIC_FIELD,MATERIALS_FIELD,EQUATIONS_SET_FIELD,SOURCE_FIELD
     TYPE(FIELD_TYPE), POINTER :: INDEPENDENT_FIELD
     TYPE(FIELD_VARIABLE_TYPE), POINTER :: FIELD_VARIABLE
-    TYPE(QUADRATURE_SCHEME_TYPE), POINTER :: DEPENDENT_QUADRATURE_SCHEME,COMPONENT_QUADRATURE_SCHEME
+    TYPE(QUADRATURE_SCHEME_TYPE), POINTER :: DEPENDENT_QUADRATURE_SCHEME,COMPONENT_QUADRATURE_SCHEME,COMPONENT_2_QUADRATURE_SCHEME
     TYPE(FIELD_INTERPOLATION_PARAMETERS_TYPE), POINTER :: GEOMETRIC_INTERPOLATION_PARAMETERS, &
       & FIBRE_INTERPOLATION_PARAMETERS,MATERIALS_INTERPOLATION_PARAMETERS,DEPENDENT_INTERPOLATION_PARAMETERS, &
       & DARCY_MATERIALS_INTERPOLATION_PARAMETERS,SOURCE_INTERPOLATION_PARAMETERS, &
@@ -1192,18 +1208,18 @@ CONTAINS
     TYPE(FIELD_INTERPOLATED_POINT_TYPE), POINTER :: GEOMETRIC_INTERPOLATED_POINT,FIBRE_INTERPOLATED_POINT, &
       & MATERIALS_INTERPOLATED_POINT,DEPENDENT_INTERPOLATED_POINT,SOURCE_INTERPOLATED_POINT, &
       & DENSITY_INTERPOLATED_POINT,INDEPENDENT_INTERPOLATED_POINT,DARCY_MATERIALS_INTERPOLATED_POINT
-    TYPE(BASIS_TYPE), POINTER :: DEPENDENT_BASIS_1,GEOMETRIC_BASIS
+    TYPE(BASIS_TYPE), POINTER :: DEPENDENT_BASIS_1,GEOMETRIC_BASIS,DEPENDENT_BASIS_TWO
     TYPE(DECOMPOSITION_TYPE), POINTER :: DECOMPOSITION
     TYPE(MESH_ELEMENT_TYPE), POINTER :: MESH_ELEMENT
     TYPE(DOMAIN_MAPPING_TYPE), POINTER :: DOMAIN_ELEMENT_MAPPING
     TYPE(VARYING_STRING) :: LOCAL_ERROR
     INTEGER(INTG) :: component_idx,component_idx2,parameter_idx,gauss_idx,element_dof_idx,FIELD_VAR_TYPE,DARCY_FIELD_VAR_TYPE
     INTEGER(INTG) :: idx,imatrix,jmatrix,Ncompartments,parameter_idx2,Kidx,global_element_idx,idx_tensor
-    INTEGER(INTG) :: NDOFS,mh !,mhs
+    INTEGER(INTG) :: NDOFS,mh,last_jmatrix !,mhs
     INTEGER(INTG) :: DEPENDENT_NUMBER_OF_COMPONENTS
     INTEGER(INTG) :: NUMBER_OF_DIMENSIONS,NUMBER_OF_XI,HYDROSTATIC_PRESSURE_COMPONENT
     INTEGER(INTG) :: NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS
-    INTEGER(INTG) :: DEPENDENT_COMPONENT_INTERPOLATION_TYPE
+    INTEGER(INTG) :: DEPENDENT_COMPONENT_INTERPOLATION_TYPE,HYDROSTATIC_COMPONENT_INTERPOLATION_TYPE
     INTEGER(INTG) :: DEPENDENT_NUMBER_OF_GAUSS_POINTS       
     INTEGER(INTG) :: MESH_COMPONENT_1,MESH_COMPONENT_NUMBER
     INTEGER(INTG) :: TOTAL_NUMBER_OF_SURFACE_PRESSURE_CONDITIONS
@@ -1220,14 +1236,15 @@ CONTAINS
     CALL ENTERS("COUPLED_ELASTICDARCY_FINITE_ELEMENT_RESIDUAL_EVALUATE",ERR,ERROR,*999)
 
     NULLIFY(BOUNDARY_CONDITIONS,BOUNDARY_CONDITIONS_VARIABLE)
-    NULLIFY(DEPENDENT_BASIS,COMPONENT_BASIS)
+    NULLIFY(DEPENDENT_BASIS,COMPONENT_BASIS,COMPONENT_2_BASIS)
+    NULLIFY(DEPENDENT_BASIS_TWO)
     NULLIFY(EQUATIONS)
     NULLIFY(EQUATIONS_MAPPING,DYNAMIC_MAPPING,NONLINEAR_MAPPING)
     NULLIFY(EQUATIONS_MATRICES,DYNAMIC_MATRICES,NONLINEAR_MATRICES,RHS_VECTOR)
     NULLIFY(STIFFNESS_MATRIX, DAMPING_MATRIX)
     NULLIFY(DEPENDENT_FIELD,FIBRE_FIELD,GEOMETRIC_FIELD,MATERIALS_FIELD,SOURCE_FIELD,INDEPENDENT_FIELD)
     NULLIFY(FIELD_VARIABLE)
-    NULLIFY(DEPENDENT_QUADRATURE_SCHEME,COMPONENT_QUADRATURE_SCHEME)
+    NULLIFY(DEPENDENT_QUADRATURE_SCHEME,COMPONENT_QUADRATURE_SCHEME,COMPONENT_2_QUADRATURE_SCHEME)
     NULLIFY(GEOMETRIC_INTERPOLATION_PARAMETERS,FIBRE_INTERPOLATION_PARAMETERS,SOURCE_INTERPOLATION_PARAMETERS)
     NULLIFY(MATERIALS_INTERPOLATION_PARAMETERS,DEPENDENT_INTERPOLATION_PARAMETERS)
     NULLIFY(INDEPENDENT_INTERPOLATION_PARAMETERS)
@@ -1441,7 +1458,9 @@ CONTAINS
             HYDROSTATIC_PRESSURE_COMPONENT=NUMBER_OF_DIMENSIONS+1
             DEPENDENT_COMPONENT_INTERPOLATION_TYPE=DEPENDENT_FIELD%VARIABLES(var1)% &
               & COMPONENTS(HYDROSTATIC_PRESSURE_COMPONENT)%INTERPOLATION_TYPE
-            IF(DEPENDENT_COMPONENT_INTERPOLATION_TYPE==FIELD_NODE_BASED_INTERPOLATION) THEN !node based
+            HYDROSTATIC_COMPONENT_INTERPOLATION_TYPE=DEPENDENT_FIELD%VARIABLES(var1)% &
+              & COMPONENTS(HYDROSTATIC_PRESSURE_COMPONENT)%INTERPOLATION_TYPE
+            IF(HYDROSTATIC_COMPONENT_INTERPOLATION_TYPE==FIELD_NODE_BASED_INTERPOLATION) THEN !node based
               COMPONENT_BASIS=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(HYDROSTATIC_PRESSURE_COMPONENT)%DOMAIN% &
                 & TOPOLOGY%ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
               COMPONENT_QUADRATURE_SCHEME=>COMPONENT_BASIS%QUADRATURE%QUADRATURE_SCHEME_MAP(BASIS_DEFAULT_QUADRATURE_SCHEME)%PTR
@@ -1453,7 +1472,7 @@ CONTAINS
                   & GAUSS_WEIGHT*Jxxi*COMPONENT_QUADRATURE_SCHEME%GAUSS_BASIS_FNS(parameter_idx,1,gauss_idx)* &
                   & (Jznu-1.0_DP+DARCY_VOL_INCREASE)
               ENDDO
-            ELSEIF(DEPENDENT_COMPONENT_INTERPOLATION_TYPE==FIELD_ELEMENT_BASED_INTERPOLATION) THEN !element based
+            ELSEIF(HYDROSTATIC_COMPONENT_INTERPOLATION_TYPE==FIELD_ELEMENT_BASED_INTERPOLATION) THEN !element based
               element_dof_idx=element_dof_idx+1
               NONLINEAR_MATRICES%ELEMENT_RESIDUAL%VECTOR(element_dof_idx)= &
                 & NONLINEAR_MATRICES%ELEMENT_RESIDUAL%VECTOR(element_dof_idx)+GAUSS_WEIGHT*Jxxi* &
@@ -1580,52 +1599,287 @@ CONTAINS
                 VIS_OVER_PERM_TENSOR(idx_tensor,idx_tensor) = 1.0e10_DP
               END DO
             END IF
+
             !loop over field components
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            !!!!!DISPLACEMENT VARIABLE ROWS!!!!!!!!
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             imatrix = 0
-            DO component_idx=1,DEPENDENT_NUMBER_OF_COMPONENTS
-              !loop over element interpolation parameters rows
-              DO parameter_idx=1,DEPENDENT_BASIS%NUMBER_OF_ELEMENT_PARAMETERS
+            DO component_idx=1,NUMBER_OF_DIMENSIONS
+              DEPENDENT_BASIS=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx)%DOMAIN%TOPOLOGY% &
+                & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
+              NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS=DEPENDENT_BASIS%NUMBER_OF_ELEMENT_PARAMETERS
+              !loop over element interpolation parameters rows for 
+              DO parameter_idx=1,NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS
                 imatrix = imatrix+1
-                PHIn=DEPENDENT_QUADRATURE_SCHEME%GAUSS_BASIS_FNS(parameter_idx,NO_PART_DERIV,gauss_idx)
                 !loop over element columns
                 jmatrix = 0
-                DO parameter_idx2=1,DEPENDENT_BASIS%NUMBER_OF_ELEMENT_PARAMETERS
+                DO component_idx2 = 1,NUMBER_OF_DIMENSIONS
+                  DEPENDENT_BASIS_TWO=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx2)%DOMAIN%TOPOLOGY% &
+                & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
+                  DO parameter_idx2=1,DEPENDENT_BASIS_TWO%NUMBER_OF_ELEMENT_PARAMETERS
+                    jmatrix = jmatrix+1
+                    IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
+                      DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                        & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
+                    ENDIF ! DAMPING_MATRIX
+                    IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
+                      STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                        & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
+                    ENDIF !Stiffness matrix
+                  ENDDO !parameter_idx2
+                ENDDO!component_idx2
+                component_idx2=HYDROSTATIC_PRESSURE_COMPONENT
+                IF(HYDROSTATIC_COMPONENT_INTERPOLATION_TYPE==FIELD_NODE_BASED_INTERPOLATION) THEN
+                  DEPENDENT_BASIS_TWO=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx2)%DOMAIN%TOPOLOGY% &
+                    & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
+                  DO parameter_idx2=1,DEPENDENT_BASIS_TWO%NUMBER_OF_ELEMENT_PARAMETERS
+                    jmatrix = jmatrix+1
+                    IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
+                      DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                        & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
+                    ENDIF ! DAMPING_MATRIX
+                    IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
+                      STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                        & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
+                    ENDIF !Stiffness matrix
+                  ENDDO !parameter_idx2
+                ELSEIF(HYDROSTATIC_COMPONENT_INTERPOLATION_TYPE==FIELD_ELEMENT_BASED_INTERPOLATION) THEN
+                  jmatrix=jmatrix+1
+                  IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
+                    DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                      & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
+                  ENDIF ! DAMPING_MATRIX
+                  IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
+                    STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                      & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
+                  ENDIF !Stiffness matrix
+                ENDIF !constant hydrostatic pressure interpolation
+                DO component_idx2=(component_idx2+1),DEPENDENT_NUMBER_OF_COMPONENTS
+                  DEPENDENT_BASIS_TWO=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx2)%DOMAIN%TOPOLOGY% &
+                    & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
+                  DO parameter_idx2=1,DEPENDENT_BASIS_TWO%NUMBER_OF_ELEMENT_PARAMETERS
+                    jmatrix = jmatrix+1
+                    IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
+                      DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                        & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
+                    ENDIF ! DAMPING_MATRIX
+                    IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
+                      STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                        & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
+                    ENDIF !Stiffness matrix
+                  ENDDO !parameter_idx2
+                ENDDO!component_idx2
+              ENDDO !parameter_idx            
+            ENDDO! displacement variables portions of component_idx
+
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            !!!!!P VARIABLE ROWS!!!!!!!!
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            
+            !Hydrostatic variable related component-idx
+            component_idx = HYDROSTATIC_PRESSURE_COMPONENT
+            IF(HYDROSTATIC_COMPONENT_INTERPOLATION_TYPE==FIELD_NODE_BASED_INTERPOLATION) THEN
+              DEPENDENT_BASIS=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx)%DOMAIN%TOPOLOGY% &
+                & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
+              NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS=DEPENDENT_BASIS%NUMBER_OF_ELEMENT_PARAMETERS
+              !loop over element interpolation parameters rows for 
+              DO parameter_idx=1,NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS
+                imatrix = imatrix+1
+                jmatrix = 0
+                PHIn=DEPENDENT_QUADRATURE_SCHEME%GAUSS_BASIS_FNS(parameter_idx,NO_PART_DERIV,gauss_idx)
+                !loop over element columns
+                DO component_idx2=1,NUMBER_OF_DIMENSIONS
+                  DEPENDENT_BASIS_TWO=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx2)%DOMAIN%TOPOLOGY% &
+                    & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
+
+                  DO parameter_idx2=1,DEPENDENT_BASIS_TWO%NUMBER_OF_ELEMENT_PARAMETERS
+                    PHIi=DEPENDENT_QUADRATURE_SCHEME%GAUSS_BASIS_FNS(parameter_idx2,NO_PART_DERIV,gauss_idx)
+                    jmatrix = jmatrix+1
+                    IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
+                      DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                        & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
+                    ENDIF ! DAMPING_MATRIX
+                    IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
+                      STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                        & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
+                    ENDIF !Stiffness matrix
+                  ENDDO !parameter_idx2
+                ENDDO !displacement variable columns component_idx2
+                component_idx2 = HYDROSTATIC_PRESSURE_COMPONENT
+                DEPENDENT_BASIS_TWO=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx2)%DOMAIN%TOPOLOGY% &
+                  & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
+                DO parameter_idx2=1,DEPENDENT_BASIS_TWO%NUMBER_OF_ELEMENT_PARAMETERS
+                  jmatrix = jmatrix+1
+                  IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
+                    DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                      & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
+                  ENDIF ! DAMPING_MATRIX
+                  IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
+                    CALL COUPLED_ELASTICDARCY_GAUSS_DFDZ(DEPENDENT_INTERPOLATED_POINT, &
+                      & ELEMENT_NUMBER,gauss_idx,NUMBER_OF_DIMENSIONS, & 
+                      & NUMBER_OF_XI,DFDZ,ERR,ERROR,*999)
+                    SUM=0.0_DP
+                    Kidx=parameter_idx
+                    DO idx=1,NUMBER_OF_XI
+                      SUM=SUM+PERM_TENSOR_OVER_VIS(Kidx,idx)*DFDZ(parameter_idx,idx)
+                    ENDDO
+                    STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                      & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+ &
+                      & SUM*PHIi*RWG*(-1.0_DP)
+                  ENDIF !Stiffness matrix
+                ENDDO !parameter_idx2
+                DO component_idx2=(component_idx2+1),DEPENDENT_NUMBER_OF_COMPONENTS
+                  DEPENDENT_BASIS_TWO=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx2)%DOMAIN%TOPOLOGY% &
+                    & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
+                  DO parameter_idx2=1,DEPENDENT_BASIS_TWO%NUMBER_OF_ELEMENT_PARAMETERS
+                    PHIi=DEPENDENT_QUADRATURE_SCHEME%GAUSS_BASIS_FNS(parameter_idx2,NO_PART_DERIV,gauss_idx)
+                    jmatrix = jmatrix+1
+                    IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
+                      DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                        & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
+                    ENDIF ! DAMPING_MATRIX
+                    IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
+                      STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                        & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
+                    ENDIF !Stiffness matrix
+                  ENDDO !parameter_idx2
+                ENDDO !velocity variable columns component_idx2
+              ENDDO !parameter_idx
+            ELSEIF(HYDROSTATIC_COMPONENT_INTERPOLATION_TYPE==FIELD_ELEMENT_BASED_INTERPOLATION) THEN
+              imatrix = imatrix+1
+              parameter_idx = 1
+              jmatrix = 0
+              !loop over element columns
+              DO component_idx2=1,NUMBER_OF_DIMENSIONS
+                DEPENDENT_BASIS_TWO=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx2)%DOMAIN%TOPOLOGY% &
+                  & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
+
+                DO parameter_idx2=1,DEPENDENT_BASIS_TWO%NUMBER_OF_ELEMENT_PARAMETERS
                   PHIi=DEPENDENT_QUADRATURE_SCHEME%GAUSS_BASIS_FNS(parameter_idx2,NO_PART_DERIV,gauss_idx)
                   jmatrix = jmatrix+1
                   IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
-                    IF(component_idx.LE.(NUMBER_OF_DIMENSIONS+1)) THEN
-                      DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
-                        & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
-                    ELSE  
-                      DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
-                        & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+ & 
-                        & PHIi*PHIn*RWG
-                    ENDIF
+                    DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                      & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
                   ENDIF ! DAMPING_MATRIX
                   IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
-                    IF(component_idx.LE.NUMBER_OF_DIMENSIONS .OR. &
-                      & component_idx.GE.(NUMBER_OF_DIMENSIONS+1)) THEN
-                      STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
-                        & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
-                    ELSE
-                    !Calculate dPhi/dZ at the gauss point, Phi is the basis function
-                    CALL COUPLED_ELASTICDARCY_GAUSS_DFDZ(DEPENDENT_INTERPOLATED_POINT, &
-                      & ELEMENT_NUMBER,gauss_idx,NUMBER_OF_DIMENSIONS, &
-                      & NUMBER_OF_XI,DFDZ,ERR,ERROR,*999)
-                      SUM = 0.0_DP
-                      Kidx = component_idx-NUMBER_OF_DIMENSIONS-1
-                      DO idx=1,NUMBER_OF_XI
-                        SUM=SUM+PERM_TENSOR_OVER_VIS(Kidx,idx)*DFDZ(parameter_idx2,idx)
-                      ENDDO  
-                      STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
-                        & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+ & 
-                        & SUM*PHIn*RWG
-                    ENDIF
-
+                    STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                      & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
                   ENDIF !Stiffness matrix
                 ENDDO !parameter_idx2
+              ENDDO !displacement variable columns component_idx2
+              component_idx2 = HYDROSTATIC_PRESSURE_COMPONENT
+              parameter_idx2 = 1
+              jmatrix = jmatrix+1
+              IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
+                DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                  & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
+              ENDIF ! DAMPING_MATRIX
+              IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
+                CALL COUPLED_ELASTICDARCY_GAUSS_DFDZ(DEPENDENT_INTERPOLATED_POINT, &
+                  & ELEMENT_NUMBER,gauss_idx,NUMBER_OF_DIMENSIONS, & 
+                  & NUMBER_OF_XI,DFDZ,ERR,ERROR,*999)
+                SUM=0.0_DP
+                Kidx=parameter_idx
+                DO idx=1,NUMBER_OF_XI
+                  SUM=SUM+PERM_TENSOR_OVER_VIS(Kidx,idx)*DFDZ(parameter_idx,idx)
+                ENDDO
+                STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                  & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+ &
+                  & SUM*RWG*(-1.0_DP)
+              ENDIF !Stiffness matrix
+
+              DO component_idx2=(component_idx2+1),DEPENDENT_NUMBER_OF_COMPONENTS
+                DEPENDENT_BASIS_TWO=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx2)%DOMAIN%TOPOLOGY% &
+                  & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
+                DO parameter_idx2=1,DEPENDENT_BASIS_TWO%NUMBER_OF_ELEMENT_PARAMETERS
+                  PHIi=DEPENDENT_QUADRATURE_SCHEME%GAUSS_BASIS_FNS(parameter_idx2,NO_PART_DERIV,gauss_idx)
+                  jmatrix = jmatrix+1
+                  IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
+                    DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                      & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
+                  ENDIF ! DAMPING_MATRIX
+                  IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
+                    STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                      & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
+                  ENDIF !Stiffness matrix
+                ENDDO !parameter_idx2
+              ENDDO !velocity variable columns component_idx2
+            ENDIF !element based hydrostatic pressure interpolation
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            !!!!!VELOCITY VARIABLE ROWS!!!!!!!!
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+            !Darcy velocity components
+            DO component_idx=(component_idx+1),DEPENDENT_NUMBER_OF_COMPONENTS
+              DEPENDENT_BASIS=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx)%DOMAIN%TOPOLOGY% &
+                & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
+              NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS=DEPENDENT_BASIS%NUMBER_OF_ELEMENT_PARAMETERS
+              !loop over element interpolation parameters rows for 
+              DO parameter_idx=1,NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS
+                imatrix = imatrix+1
+                PHIn=DEPENDENT_QUADRATURE_SCHEME%GAUSS_BASIS_FNS(parameter_idx,NO_PART_DERIV,gauss_idx)
+                jmatrix = 0
+                DO component_idx2 = 1,NUMBER_OF_DIMENSIONS
+                  DEPENDENT_BASIS_TWO=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx2)%DOMAIN%TOPOLOGY% &
+                    & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
+                  DO parameter_idx2=1,DEPENDENT_BASIS_TWO%NUMBER_OF_ELEMENT_PARAMETERS
+                    jmatrix = jmatrix+1
+                    IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
+                      DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                        & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
+                    ENDIF ! DAMPING_MATRIX
+                    IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
+                      STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                        & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
+                    ENDIF !Stiffness matrix
+                  ENDDO !parameter_idx2
+                ENDDO!component_idx2
+                component_idx2=HYDROSTATIC_PRESSURE_COMPONENT
+                IF(HYDROSTATIC_COMPONENT_INTERPOLATION_TYPE==FIELD_NODE_BASED_INTERPOLATION) THEN
+                  DEPENDENT_BASIS_TWO=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx2)%DOMAIN%TOPOLOGY% &
+                    & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
+                  DO parameter_idx2=1,DEPENDENT_BASIS_TWO%NUMBER_OF_ELEMENT_PARAMETERS
+                    jmatrix = jmatrix+1
+                    IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
+                      DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                        & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
+                    ENDIF ! DAMPING_MATRIX
+                    IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
+                      STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                        & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
+                    ENDIF !Stiffness matrix
+                  ENDDO !parameter_idx2
+                ELSEIF(HYDROSTATIC_COMPONENT_INTERPOLATION_TYPE==FIELD_ELEMENT_BASED_INTERPOLATION) THEN
+                  jmatrix=jmatrix+1
+                  IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
+                    DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                      & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
+                  ENDIF ! DAMPING_MATRIX
+                  IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
+                    STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                      & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
+                  ENDIF !Stiffness matrix
+                ENDIF !constant hydrostatic pressure interpolation
+                DO component_idx2=(component_idx2+1),DEPENDENT_NUMBER_OF_COMPONENTS
+                  DEPENDENT_BASIS_TWO=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx2)%DOMAIN%TOPOLOGY% &
+                    & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
+                  DO parameter_idx2=1,DEPENDENT_BASIS_TWO%NUMBER_OF_ELEMENT_PARAMETERS
+                    PHIi=DEPENDENT_QUADRATURE_SCHEME%GAUSS_BASIS_FNS(parameter_idx2,NO_PART_DERIV,gauss_idx)
+                    jmatrix = jmatrix+1
+                    IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
+                      DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                        & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+&
+                        & PHIi*PHIn*RWG
+                    ENDIF ! DAMPING_MATRIX
+                    IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
+                      STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                        & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
+                    ENDIF !Stiffness matrix
+                  ENDDO !parameter_idx2
+                ENDDO!component_idx2
               ENDDO !parameter_idx            
-            ENDDO!component_idx
+            ENDDO! velocity variables portions of component_idx
           ENDDO!gauss_idx
         ENDIF !STIFFNESS/DAMPING MATRIX UPDATE
       ELSE
@@ -1699,6 +1953,7 @@ CONTAINS
           SELECT CASE(CONTROL_LOOP%PROBLEM%SUBTYPE)
             CASE(PROBLEM_NO_SUBTYPE)
               !CALL NAVIER_STOKES_POST_SOLVE_OUTPUT_DATA(CONTROL_LOOP,SOLVER,ERR,ERROR,*999)
+              !CALL SOLVER_NONLINEAR_DIVERGENCE_EXIT(SOLVER,ERR,ERROR,*999)
             CASE DEFAULT
               LOCAL_ERROR="Problem subtype "//TRIM(NUMBER_TO_VSTRING(CONTROL_LOOP%PROBLEM%SUBTYPE,"*",ERR,ERROR))// &
                 & " is not valid for a coupled-finite-elastic-darcy of a multi-physics problem class."
@@ -1990,11 +2245,6 @@ CONTAINS
       ENDDO
     ENDDO
 
-    ! Populate a 3 x 3 square dzdXi if this is a membrane problem in 3D space
-    IF (NUMBER_OF_DIMENSIONS == 3 .AND. NUMBER_OF_XI == 2) THEN
-        CALL CROSS_PRODUCT(DZDXI(:,1),DZDXI(:,2),DZDXI(:,3),ERR,ERROR,*999)
-        DZDXI(:,3) = NORMALISE(DZDXI(:,3),ERR,ERROR)
-    ENDIF
 
     CALL INVERT(DZDXI,DXIDZ,Jzxi,ERR,ERROR,*999) !dxi/dz
 
@@ -2062,11 +2312,11 @@ CONTAINS
           CASE(PROBLEM_CONTROL_TIME_LOOP_TYPE)
             CALL CONTROL_LOOP_CURRENT_TIMES_GET(CONTROL_LOOP,CURRENT_TIME,TIME_INCREMENT,ERR,ERROR,*999)
             IF(CONTROL_LOOP%OUTPUT_TYPE>=CONTROL_LOOP_PROGRESS_OUTPUT) THEN
-              CALL WRITE_STRING(GENERAL_OUTPUT_TYPE,"==================================================",ERR,ERROR,*999)
-              CALL WRITE_STRING(GENERAL_OUTPUT_TYPE,"=============== Starting time step ===============",ERR,ERROR,*999)
-              CALL WRITE_STRING_VALUE(GENERAL_OUTPUT_TYPE,"CURRENT_TIME          = ",CURRENT_TIME,ERR,ERROR,*999)
-              CALL WRITE_STRING_VALUE(GENERAL_OUTPUT_TYPE,"TIME_INCREMENT        = ",TIME_INCREMENT,ERR,ERROR,*999)
-              CALL WRITE_STRING(GENERAL_OUTPUT_TYPE,"==================================================",ERR,ERROR,*999)
+              !CALL WRITE_STRING(GENERAL_OUTPUT_TYPE,"==================================================",ERR,ERROR,*999)
+              !CALL WRITE_STRING(GENERAL_OUTPUT_TYPE,"=============== Starting time step ===============",ERR,ERROR,*999)
+              !CALL WRITE_STRING_VALUE(GENERAL_OUTPUT_TYPE,"CURRENT_TIME          = ",CURRENT_TIME,ERR,ERROR,*999)
+              !CALL WRITE_STRING_VALUE(GENERAL_OUTPUT_TYPE,"TIME_INCREMENT        = ",TIME_INCREMENT,ERR,ERROR,*999)
+              !CALL WRITE_STRING(GENERAL_OUTPUT_TYPE,"==================================================",ERR,ERROR,*999)
             ENDIF
             IF(DIAGNOSTICS1) THEN
               CALL WRITE_STRING(DIAGNOSTIC_OUTPUT_TYPE,"==================================================",ERR,ERROR,*999)
