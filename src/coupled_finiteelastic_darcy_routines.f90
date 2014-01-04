@@ -1720,9 +1720,10 @@ CONTAINS
                       & ELEMENT_NUMBER,gauss_idx,NUMBER_OF_DIMENSIONS, & 
                       & NUMBER_OF_XI,DFDZ,ERR,ERROR,*999)
                     SUM=0.0_DP
-                    Kidx=parameter_idx
-                    DO idx=1,NUMBER_OF_XI
-                      SUM=SUM+PERM_TENSOR_OVER_VIS(Kidx,idx)*DFDZ(parameter_idx,idx)
+                    DO Kidx=1,NUMBER_OF_XI
+                      DO idx=1,NUMBER_OF_XI
+                        SUM=SUM+PERM_TENSOR_OVER_VIS(Kidx,idx)*DFDZ(parameter_idx,idx)
+                      ENDDO
                     ENDDO
                     STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
                       & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+ &
@@ -1780,9 +1781,10 @@ CONTAINS
                   & ELEMENT_NUMBER,gauss_idx,NUMBER_OF_DIMENSIONS, & 
                   & NUMBER_OF_XI,DFDZ,ERR,ERROR,*999)
                 SUM=0.0_DP
-                Kidx=parameter_idx
-                DO idx=1,NUMBER_OF_XI
-                  SUM=SUM+PERM_TENSOR_OVER_VIS(Kidx,idx)*DFDZ(parameter_idx,idx)
+                DO Kidx=1,NUMBER_OF_XI
+                  DO idx=1,NUMBER_OF_XI
+                    SUM=SUM+PERM_TENSOR_OVER_VIS(Kidx,idx)*DFDZ(parameter_idx,idx)
+                  ENDDO
                 ENDDO
                 STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
                   & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+ &
