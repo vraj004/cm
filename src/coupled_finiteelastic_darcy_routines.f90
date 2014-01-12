@@ -1423,6 +1423,23 @@ CONTAINS
             CALL COUPLED_ELASTICDARCY_GAUSS_DFDZ(DEPENDENT_INTERPOLATED_POINT,ELEMENT_NUMBER,gauss_idx,NUMBER_OF_DIMENSIONS, &
               & NUMBER_OF_XI,DFUDZ,DFPDZ,DFVDZ,ERR,ERROR,*999)
 
+            IF(DIAGNOSTICS1) THEN
+              CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  Jznu = ",Jznu,ERR,ERROR,*999)
+              CALL WRITE_STRING_MATRIX(DIAGNOSTIC_OUTPUT_TYPE,1,1,3,1,1,3, &
+                & 3,3,DFUDZ,WRITE_STRING_MATRIX_NAME_AND_INDICES,'("    DFUDZ','(",I1,",:)',' :",3(X,E13.6))', &
+                & '(17X,3(X,E13.6))',ERR,ERROR,*999)
+              CALL WRITE_STRING_MATRIX(DIAGNOSTIC_OUTPUT_TYPE,1,1,3,1,1,3, &
+                & 3,3,DFPDZ,WRITE_STRING_MATRIX_NAME_AND_INDICES,'("    DFPDZ','(",I1,",:)',' :",3(X,E13.6))', &
+                & '(17X,3(X,E13.6))',ERR,ERROR,*999)
+              CALL WRITE_STRING_MATRIX(DIAGNOSTIC_OUTPUT_TYPE,1,1,3,1,1,3, &
+                & 3,3,DFVDZ,WRITE_STRING_MATRIX_NAME_AND_INDICES,'("    DFVDZ','(",I1,",:)',' :",3(X,E13.6))', &
+                & '(17X,3(X,E13.6))',ERR,ERROR,*999)
+
+              CALL WRITE_STRING_MATRIX(DIAGNOSTIC_OUTPUT_TYPE,1,1,3,1,1,3, &
+                & 3,3,CAUCHY_TENSOR, &
+                & WRITE_STRING_MATRIX_NAME_AND_INDICES,'("    CAUCHY_TENSOR','(",I1,",:)',' :",3(X,E13.6))', &
+                & '(17X,3(X,E13.6))',ERR,ERROR,*999)
+            ENDIF
 
             !Now add up the residual terms for the stress equilibrium eqn gradSIGMA=0
             element_dof_idx=0
@@ -1483,18 +1500,18 @@ CONTAINS
                 element_dof_idx=element_dof_idx+1 
                 vGRADphi = 0.0_DP
                 vGRADphi_stable = 0.0_DP
-                DO parameter_idx2=1,NUMBER_OF_DIMENSIONS
+                DO component_idx2=1,NUMBER_OF_DIMENSIONS
                   vGRADphi = vGRADphi+ &
-                  & DEPENDENT_INTERPOLATED_POINT%VALUES(NUMBER_OF_DIMENSIONS+1+parameter_idx2,NO_PART_DERIV)* &
-                  & DFPDZ(parameter_idx,parameter_idx2)
+                  & DEPENDENT_INTERPOLATED_POINT%VALUES(NUMBER_OF_DIMENSIONS+1+component_idx2,NO_PART_DERIV)* &
+                  & DFPDZ(parameter_idx,component_idx2)
 
                   vGRADphi_stable = vGRADphi_stable+ &
-                  & DEPENDENT_INTERPOLATED_POINT%VALUES(NUMBER_OF_DIMENSIONS+1+parameter_idx2,NO_PART_DERIV)* &
-                  & DFPDZ(parameter_idx,parameter_idx2)
+                  & DEPENDENT_INTERPOLATED_POINT%VALUES(NUMBER_OF_DIMENSIONS+1+component_idx2,NO_PART_DERIV)* &
+                  & DFPDZ(parameter_idx,component_idx2)
 
                   !& DEPENDENT_INTERPOLATED_POINT%VALUES(NUMBER_OF_DIMENSIONS+3,NO_PART_DERIV)*DFPDZ(parameter_idx,2) + &
                   !& DEPENDENT_INTERPOLATED_POINT%VALUES(NUMBER_OF_DIMENSIONS+4,NO_PART_DERIV)*DFPDZ(parameter_idx,3)
-                ENDDO !parameter_idx2
+                ENDDO !component_idx2
                 !calculate GRADP
                 GRADP=0.0_DP
                 !Get the permeability, stored in the darcy material component
@@ -1511,11 +1528,11 @@ CONTAINS
                 PERM_TENSOR_OVER_VIS(2,2) = DARCY_K/DARCY_mu
                 PERM_TENSOR_OVER_VIS(3,3) = DARCY_K/DARCY_mu
 
-                DO idx=1,NUMBER_OF_DIMENSIONS
+                DO component_idx2=1,NUMBER_OF_DIMENSIONS
                   DO parameter_idx2 = 1,NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS
-                    GRADP(idx) = GRADP(idx)+ &
+                    GRADP(component_idx2) = GRADP(component_idx2)+ &
                       & DEPENDENT_INTERPOLATION_PARAMETERS%PARAMETERS(parameter_idx2,NUMBER_OF_DIMENSIONS+1)* &
-                      & (DFPDZ(parameter_idx2,idx))
+                      & (DFPDZ(parameter_idx2,component_idx2))
                   ENDDO
                 ENDDO
                 KGRADP=0.0_DP
@@ -1533,8 +1550,8 @@ CONTAINS
                   & NONLINEAR_MATRICES%ELEMENT_RESIDUAL%VECTOR(element_dof_idx)+ &
                   & GAUSS_WEIGHT*Jxxi*COMPONENT_QUADRATURE_SCHEME%GAUSS_BASIS_FNS(parameter_idx,1,gauss_idx)* &
                   & (Jznu-1.0_DP)- &
-                  & (GAUSS_WEIGHT*Jxxi*vGRADphi)+(0.5_DP*vGRADphi_stable*Jxxi*GAUSS_WEIGHT)+&
-                  & (0.5_DP*GRADpGRADq_stable*Jxxi*GAUSS_WEIGHT)
+                  & (GAUSS_WEIGHT*Jxxi*vGRADphi) !+(0.5_DP*vGRADphi_stable*Jxxi*GAUSS_WEIGHT)+&
+                  !& (0.5_DP*GRADpGRADq_stable*Jxxi*GAUSS_WEIGHT)
               
               ENDDO
             ELSEIF(HYDROSTATIC_COMPONENT_INTERPOLATION_TYPE==FIELD_ELEMENT_BASED_INTERPOLATION) THEN !element based
@@ -1645,7 +1662,7 @@ CONTAINS
         
             !Calculate RWG.
             RWG=EQUATIONS%INTERPOLATION%GEOMETRIC_INTERP_POINT_METRICS(FIELD_U_VARIABLE_TYPE)%PTR%JACOBIAN* &
-              & DEPENDENT_QUADRATURE_SCHEME%GAUSS_WEIGHTS(gauss_idx)
+              & GAUSS_WEIGHT
             !Get the permeability, stored in the darcy material component
             DARCY_K = DARCY_MATERIALS_INTERPOLATED_POINT%VALUES(1,NO_PART_DERIV)
             DARCY_mu = DARCY_MATERIALS_INTERPOLATED_POINT%VALUES(2,NO_PART_DERIV)
@@ -1786,22 +1803,6 @@ CONTAINS
                       & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
                   ENDIF ! DAMPING_MATRIX
                   IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
-                  !  CALL COUPLED_ELASTICDARCY_GAUSS_DFDZ(DEPENDENT_INTERPOLATED_POINT, &
-                  !    & ELEMENT_NUMBER,gauss_idx,NUMBER_OF_DIMENSIONS, & 
-                  !    & NUMBER_OF_XI,DFUDZ,DFPDZ,DFVDZ,ERR,ERROR,*999)
-                  !  SUM=0.0_DP
-                  !  SUM2=0.0_DP
-                  !  DO Kidx=1,NUMBER_OF_XI
-                  !    DO idx=1,NUMBER_OF_XI
-                  !      SUM=SUM+PERM_TENSOR_OVER_VIS(Kidx,idx)*DFVDZ(parameter_idx,idx)
-                  !      SUM2=SUM2+PERM_TENSOR_OVER_VIS(Kidx,idx)*DFPDZ(parameter_idx2,idx)
-                  !    ENDDO
-                  !  ENDDO
-
-                  !  STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
-                  !    & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+ &
-                  !    & SUM*PHIi*RWG*(-1.0_DP)- &
-                  !    & 0.5_DP*RWG*PHIn*SUM2 !stabilizing term
                      STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
                        & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+ &
                        & 0.0_DP
@@ -1859,18 +1860,6 @@ CONTAINS
                   & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
               ENDIF ! DAMPING_MATRIX
               IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
-                !CALL COUPLED_ELASTICDARCY_GAUSS_DFDZ(DEPENDENT_INTERPOLATED_POINT, &
-                !  & ELEMENT_NUMBER,gauss_idx,NUMBER_OF_DIMENSIONS, & 
-                !  & NUMBER_OF_XI,DFUDZ,DFPDZ,DFVDZ,ERR,ERROR,*999)
-                !SUM=0.0_DP
-                !DO Kidx=1,NUMBER_OF_XI
-                !  DO idx=1,NUMBER_OF_XI
-                !    SUM=SUM+PERM_TENSOR_OVER_VIS(Kidx,idx)*DFVDZ(parameter_idx,idx)
-                !  ENDDO
-                !ENDDO
-                !STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
-                !  & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+ &
-                !  & SUM*RWG*(-1.0_DP)
 
                 STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
                   & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+ &
@@ -1930,7 +1919,11 @@ CONTAINS
                 IF(HYDROSTATIC_COMPONENT_INTERPOLATION_TYPE==FIELD_NODE_BASED_INTERPOLATION) THEN
                   DEPENDENT_BASIS_TWO=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx2)%DOMAIN%TOPOLOGY% &
                     & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
+                  DEPENDENT_QUADRATURE_SCHEME_TWO=> &
+                    & DEPENDENT_BASIS_TWO%QUADRATURE%QUADRATURE_SCHEME_MAP(BASIS_DEFAULT_QUADRATURE_SCHEME)%PTR
+
                   DO parameter_idx2=1,DEPENDENT_BASIS_TWO%NUMBER_OF_ELEMENT_PARAMETERS
+                    PHIi=DEPENDENT_QUADRATURE_SCHEME_TWO%GAUSS_BASIS_FNS(parameter_idx2,NO_PART_DERIV,gauss_idx)
                     jmatrix = jmatrix+1
                     IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
                       DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
@@ -1950,8 +1943,8 @@ CONTAINS
 
                       STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
                         & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)- &
-                        & SUM*PHIi*RWG &
-                        & -0.5_DP*RWG*PHIn*SUM2 !stabilizing term                      
+                        & SUM*PHIi*RWG !&
+                        !& -0.5_DP*RWG*PHIn*SUM2 !stabilizing term                      
                     ENDIF !Stiffness matrix
                   ENDDO !parameter_idx2
                 ELSEIF(HYDROSTATIC_COMPONENT_INTERPOLATION_TYPE==FIELD_ELEMENT_BASED_INTERPOLATION) THEN
@@ -1977,7 +1970,7 @@ CONTAINS
                     IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
                       DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
                         & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+&
-                        & PHIi*PHIn*RWG - 0.5_DP*PHIi*PHIn*RWG !-0.5_DP stuff for stabilization 
+                        & PHIi*PHIn*RWG  !- 0.5_DP*PHIi*PHIn*RWG !-0.5_DP stuff for stabilization 
                     ENDIF ! DAMPING_MATRIX
                     IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
                       STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
@@ -2414,6 +2407,8 @@ CONTAINS
         ENDDO
       ENDDO
     ENDDO
+
+
 
     CALL EXITS("COUPLED_ELASTICDARCY_GAUSS_DFDZ")
     RETURN
