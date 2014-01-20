@@ -163,6 +163,7 @@ MODULE FIELD_ROUTINES
   INTEGER(INTG), PARAMETER :: FIELD_DELU10DELN_VARIABLE_TYPE=46 !<Twelfth normal derivative variable type i.e., dv/dn \see FIELD_ROUTINES_VariableTypes,FIELD_ROUTINES
   INTEGER(INTG), PARAMETER :: FIELD_DELU10DELT_VARIABLE_TYPE=47 !<Twelfth time derivative variable type i.e., du/dt \see FIELD_ROUTINES_VariableTypes,FIELD_ROUTINES
   INTEGER(INTG), PARAMETER :: FIELD_DEL2U10DELT2_VARIABLE_TYPE=48 !<Twelfth time derivative variable type i.e., d^2u/dt^2 \see FIELD_ROUTINES_VariableTypes,FIELD_ROUTINES
+  INTEGER(INTG), PARAMETER :: FIELD_V1_VARIABLE_TYPE=49 !<Thirteenth standard variable type i.e., v \see FIELD_ROUTINES_VariableTypes,FIELD_ROUTINES
   !>@}
   
   !> \addtogroup FIELD_ROUTINES_DofTypes FIELD_ROUTINES::DofTypes
