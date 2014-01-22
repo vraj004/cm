@@ -75,7 +75,7 @@ MODULE COUPLED_FINITEELASTIC_DARCY_ROUTINES
   PUBLIC COUPLED_FINITEELASTIC_DARCY_SET_SOLUTION_METHOD_SET
   PUBLIC COUPLED_FINITEELASTIC_DARCY_PROBLEM_SUBTYPE_SET,COUPLED_FINITEELASTIC_DARCY_PROBLEM_SETUP
   PUBLIC COUPLED_FINITEELASTIC_DARCY_PRE_SOLVE,COUPLED_ELASTICDARCY_GAUSS_DEFORMATION_GRADIENT_TENSOR
-  PUBLIC COUPLED_ELASTICDARCY_GAUSS_TOTAL_KIRCHOFF_TENSOR,COUPLED_ELASTICDARCY_CONTROL_LOOP_PRE_LOOP
+  PUBLIC COUPLED_ELASTICDARCY_GAUSS_KIRCHOFF_TENSOR,COUPLED_ELASTICDARCY_CONTROL_LOOP_PRE_LOOP
 
 CONTAINS
 
@@ -1236,11 +1236,11 @@ CONTAINS
     INTEGER(INTG) :: var1 ! Variable number corresponding to 'U' 
     INTEGER(INTG) :: var2 ! Variable number corresponding to 'DELUDLEN' 
     INTEGER(INTG), POINTER :: EQUATIONS_SET_FIELD_DATA(:)
-    REAL(DP) :: DZDNU(3,3),TOTAL_KIRCHOFF_TENSOR(3,3),DZDNUT(3,3),AZL(3,3),AZU(3,3),I3,P,PIOLA_TENSOR(3,3),TEMP(3,3),GRADP(3)
-    REAL(DP) :: DFUDZ(64,3),DFVDZ(64,3),DFPDZ(64,3) !temporary until a proper alternative is found
+    REAL(DP) :: DZDNU(3,3),KIRCHOFF_TENSOR(3,3),DZDNUT(3,3),AZL(3,3),AZU(3,3),I3,P,PIOLA_TENSOR(3,3),TEMP(3,3),GRADP(3)
+    REAL(DP) :: DFUDZ(64,3),DFPDZ(64,3),DFUDX(64,3),DFPDX(64,3) !temporary until a proper alternative is found
     REAL(DP) :: GAUSS_WEIGHT,Jznu,Jxxi,PERM_TENSOR_OVER_VIS(3,3), VIS_OVER_PERM_TENSOR(3,3),KGRADP(3)
     REAL(DP) :: DARCY_VOL_INCREASE,DENSITY  !coupling with Darcy model
-    REAL(DP) :: Mfact, bfact, p0fact,DARCY_K,DARCY_mu,PHIn,PHIi,RWG,Jmat,SUM,SUM2,vGRADphi,vGRADphi_stable,GRADpGRADq_stable
+    REAL(DP) :: Mfact, bfact, p0fact,DARCY_K,DARCY_mu,PHIn,PHIi,RWG,Jmat,SUM,SUM2,vGRADphi
 
 
     CALL ENTERS("COUPLED_ELASTICDARCY_FINITE_ELEMENT_RESIDUAL_EVALUATE",ERR,ERROR,*999)
@@ -1329,10 +1329,11 @@ CONTAINS
         DO idx=1,3
           DZDNU(idx,idx)=1.0_DP
         ENDDO
-        TOTAL_KIRCHOFF_TENSOR=DZDNU ! copy the identity matrix
+        KIRCHOFF_TENSOR=DZDNU ! copy the identity matrix
         DFUDZ=0.0_DP ! (parameter_idx,component_idx)
-        DFVDZ=0.0_DP
         DFPDZ=0.0_DP
+        DFUDX = 0.0_DP
+        DFPDX = 0.0_DP
 
         !Grab interpolation parameters
         FIELD_VAR_TYPE=EQUATIONS_SET%EQUATIONS%EQUATIONS_MAPPING%NONLINEAR_MAPPING%RESIDUAL_VARIABLES(1)%PTR%VARIABLE_TYPE
@@ -1407,15 +1408,18 @@ CONTAINS
               CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  gauss_idx = ",gauss_idx,ERR,ERROR,*999)
             ENDIF
 
-            !Calculate Sigma=FTF', the Cauchy stress tensor at the gauss point (why do people have Sigma=1/Jznu.FTF' in finite elasticity code?)
-            CALL COUPLED_ELASTICDARCY_GAUSS_TOTAL_KIRCHOFF_TENSOR(EQUATIONS_SET,DEPENDENT_INTERPOLATED_POINT, &
+            !Calculate KIRCHOFF_EFF=FTF', the Cauchy stress tensor at the gauss point (why do people have Sigma=1/Jznu.FTF' in finite elasticity code?)
+            CALL COUPLED_ELASTICDARCY_GAUSS_KIRCHOFF_TENSOR(EQUATIONS_SET,DEPENDENT_INTERPOLATED_POINT, &
               & MATERIALS_INTERPOLATED_POINT, &
-              & INDEPENDENT_INTERPOLATED_POINT,TOTAL_KIRCHOFF_TENSOR,Jznu,DZDNU,NUMBER_OF_DIMENSIONS,&
+              & INDEPENDENT_INTERPOLATED_POINT,KIRCHOFF_TENSOR,Jznu,DZDNU,NUMBER_OF_DIMENSIONS,&
               & ELEMENT_NUMBER,gauss_idx,ERR,ERROR,*999)
 
             !Calculate dPhi/dZ at the gauss point, Phi is the basis function
             CALL COUPLED_ELASTICDARCY_GAUSS_DFDZ(DEPENDENT_INTERPOLATED_POINT,ELEMENT_NUMBER,gauss_idx,NUMBER_OF_DIMENSIONS, &
-              & NUMBER_OF_XI,DFUDZ,DFPDZ,DFVDZ,ERR,ERROR,*999)
+              & NUMBER_OF_XI,DFUDZ,DFPDZ,ERR,ERROR,*999)
+            !Calculate dPhi/dX at the gauss point, Phi is the basis function
+            CALL COUPLED_ELASTICDARCY_GAUSS_DFDZ(GEOMETRIC_INTERPOLATED_POINT,ELEMENT_NUMBER,gauss_idx,NUMBER_OF_DIMENSIONS, &
+              & NUMBER_OF_XI,DFUDX,DFPDX,ERR,ERROR,*999)
 
             IF(DIAGNOSTICS1) THEN
               CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  Jznu = ",Jznu,ERR,ERROR,*999)
@@ -1425,17 +1429,21 @@ CONTAINS
               CALL WRITE_STRING_MATRIX(DIAGNOSTIC_OUTPUT_TYPE,1,1,3,1,1,3, &
                 & 3,3,DFPDZ,WRITE_STRING_MATRIX_NAME_AND_INDICES,'("    DFPDZ','(",I1,",:)',' :",3(X,E13.6))', &
                 & '(17X,3(X,E13.6))',ERR,ERROR,*999)
+
               CALL WRITE_STRING_MATRIX(DIAGNOSTIC_OUTPUT_TYPE,1,1,3,1,1,3, &
-                & 3,3,DFVDZ,WRITE_STRING_MATRIX_NAME_AND_INDICES,'("    DFVDZ','(",I1,",:)',' :",3(X,E13.6))', &
+                & 3,3,DFUDX,WRITE_STRING_MATRIX_NAME_AND_INDICES,'("    DFUDX','(",I1,",:)',' :",3(X,E13.6))', &
+                & '(17X,3(X,E13.6))',ERR,ERROR,*999)
+              CALL WRITE_STRING_MATRIX(DIAGNOSTIC_OUTPUT_TYPE,1,1,3,1,1,3, &
+                & 3,3,DFPDX,WRITE_STRING_MATRIX_NAME_AND_INDICES,'("    DFPDX','(",I1,",:)',' :",3(X,E13.6))', &
                 & '(17X,3(X,E13.6))',ERR,ERROR,*999)
 
               CALL WRITE_STRING_MATRIX(DIAGNOSTIC_OUTPUT_TYPE,1,1,3,1,1,3, &
-                & 3,3,TOTAL_KIRCHOFF_TENSOR, &
-                & WRITE_STRING_MATRIX_NAME_AND_INDICES,'("    TOTAL_KIRCHOFF_TENSOR','(",I1,",:)',' :",3(X,E13.6))', &
+                & 3,3,KIRCHOFF_TENSOR, &
+                & WRITE_STRING_MATRIX_NAME_AND_INDICES,'("    KIRCHOFF_TENSOR','(",I1,",:)',' :",3(X,E13.6))', &
                 & '(17X,3(X,E13.6))',ERR,ERROR,*999)
             ENDIF
 
-            !Now add up the residual terms for the stress equilibrium eqn gradSIGMA=0
+            !Now add up the residual terms for the momentum balance equation 
             element_dof_idx=0
             DO component_idx=1,NUMBER_OF_DIMENSIONS
               DEPENDENT_COMPONENT_INTERPOLATION_TYPE=DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx)%INTERPOLATION_TYPE
@@ -1448,38 +1456,18 @@ CONTAINS
                   DO component_idx2=1,NUMBER_OF_DIMENSIONS
                     NONLINEAR_MATRICES%ELEMENT_RESIDUAL%VECTOR(element_dof_idx)= &
                       & NONLINEAR_MATRICES%ELEMENT_RESIDUAL%VECTOR(element_dof_idx)+ &
-                      & GAUSS_WEIGHT*Jxxi*Jznu*TOTAL_KIRCHOFF_TENSOR(component_idx,component_idx2)* &
+                      & GAUSS_WEIGHT*Jxxi*KIRCHOFF_TENSOR(component_idx,component_idx2)* &
                       & DFUDZ(parameter_idx,component_idx2)
                   ENDDO ! component_idx2 (inner component index)
                 ENDDO ! parameter_idx (residual vector loop)
               ELSEIF(DEPENDENT_COMPONENT_INTERPOLATION_TYPE==FIELD_ELEMENT_BASED_INTERPOLATION) THEN
                 !Will probably never be used
-                CALL FLAG_ERROR("Finite elasticity-Darcy with element based interpolation is not implemented.",ERR,ERROR,*999)
+                CALL FLAG_ERROR("Finite elasticity-Darcy with element based displacement interpolation is not implemented.",ERR,ERROR,*999)
               ENDIF
             ENDDO ! component_idx
 
-            !CALCULATE div(U1,U2,U3) - net flow out of element
-            !DARCY_VOL_INCREASE=0.0_DP
-            !DO component_idx=(NUMBER_OF_DIMENSIONS+2),DEPENDENT_NUMBER_OF_COMPONENTS
-            !  DEPENDENT_COMPONENT_INTERPOLATION_TYPE=DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx)%INTERPOLATION_TYPE
-            !  IF(DEPENDENT_COMPONENT_INTERPOLATION_TYPE==FIELD_NODE_BASED_INTERPOLATION) THEN !node based
-            !    DEPENDENT_BASIS=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx)%DOMAIN%TOPOLOGY% &
-            !      & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
-            !    NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS=DEPENDENT_BASIS%NUMBER_OF_ELEMENT_PARAMETERS
-            !    DO parameter_idx=1,NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS
-            !      DARCY_VOL_INCREASE= &
-            !        & DARCY_VOL_INCREASE+ &
-            !        & GAUSS_WEIGHT*Jxxi*Jznu*DEPENDENT_INTERPOLATION_PARAMETERS%PARAMETERS(parameter_idx,component_idx)&
-            !        & *DFVDZ(parameter_idx,(component_idx-NUMBER_OF_DIMENSIONS-1)) !assumes that same phi used for velcocity and displacements
-            !    ENDDO ! parameter_idx (residual vector loop)
-            !  ELSEIF(DEPENDENT_COMPONENT_INTERPOLATION_TYPE==FIELD_ELEMENT_BASED_INTERPOLATION) THEN
-            !    !Will probably never be used
-            !    CALL FLAG_ERROR("Finite elastic-Darcy with element based interpolation is not implemented.",ERR,ERROR,*999)
-            !  ENDIF
-            !ENDDO ! component_idx
-            !CALCULATE vGRADphi integral - net flow out of element 
             
-            !INCOMPRESSIBILITY CONSTRAINT -vGRADphi+J-1 dV = phi(vdotn)dS
+            !Add conservation of mass components of the residual vecotr
             HYDROSTATIC_PRESSURE_COMPONENT=NUMBER_OF_DIMENSIONS+1
             DEPENDENT_COMPONENT_INTERPOLATION_TYPE=DEPENDENT_FIELD%VARIABLES(var1)% &
               & COMPONENTS(HYDROSTATIC_PRESSURE_COMPONENT)%INTERPOLATION_TYPE
@@ -1492,67 +1480,15 @@ CONTAINS
               NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS=COMPONENT_BASIS%NUMBER_OF_ELEMENT_PARAMETERS
               DO parameter_idx=1,NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS
                 element_dof_idx=element_dof_idx+1 
-                vGRADphi = 0.0_DP
-                vGRADphi_stable = 0.0_DP
-                DO component_idx2=1,NUMBER_OF_DIMENSIONS
-                  vGRADphi = vGRADphi+ &
-                  & DEPENDENT_INTERPOLATED_POINT%VALUES(NUMBER_OF_DIMENSIONS+1+component_idx2,NO_PART_DERIV)* &
-                  & DFPDZ(parameter_idx,component_idx2)
-
-                  vGRADphi_stable = vGRADphi_stable+ &
-                  & DEPENDENT_INTERPOLATED_POINT%VALUES(NUMBER_OF_DIMENSIONS+1+component_idx2,NO_PART_DERIV)* &
-                  & DFPDZ(parameter_idx,component_idx2)
-
-                  !& DEPENDENT_INTERPOLATED_POINT%VALUES(NUMBER_OF_DIMENSIONS+3,NO_PART_DERIV)*DFPDZ(parameter_idx,2) + &
-                  !& DEPENDENT_INTERPOLATED_POINT%VALUES(NUMBER_OF_DIMENSIONS+4,NO_PART_DERIV)*DFPDZ(parameter_idx,3)
-                ENDDO !component_idx2
-                !calculate GRADP
-                GRADP=0.0_DP
-                !Get the permeability, stored in the darcy material component
-                CALL FIELD_INTERPOLATE_GAUSS(NO_PART_DERIV,BASIS_DEFAULT_QUADRATURE_SCHEME,gauss_idx, &
-                  & DARCY_MATERIALS_INTERPOLATED_POINT,ERR,ERROR,*999)
-
-                DARCY_K = DARCY_MATERIALS_INTERPOLATED_POINT%VALUES(1,NO_PART_DERIV)
-                DARCY_mu = DARCY_MATERIALS_INTERPOLATED_POINT%VALUES(2,NO_PART_DERIV)
-                !set up permeability/viscocity tensor (see opencmiss documentation for equation details)
-                !current assumption of isotropic permeability
-
-                PERM_TENSOR_OVER_VIS=0.0_DP
-                PERM_TENSOR_OVER_VIS(1,1) = DARCY_K/DARCY_mu
-                PERM_TENSOR_OVER_VIS(2,2) = DARCY_K/DARCY_mu
-                PERM_TENSOR_OVER_VIS(3,3) = DARCY_K/DARCY_mu
-
-                DO component_idx2=1,NUMBER_OF_DIMENSIONS
-                  DO parameter_idx2 = 1,NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS
-                    GRADP(component_idx2) = GRADP(component_idx2)+ &
-                      & DEPENDENT_INTERPOLATION_PARAMETERS%PARAMETERS(parameter_idx2,NUMBER_OF_DIMENSIONS+1)* &
-                      & (DFPDZ(parameter_idx2,component_idx2))
-                  ENDDO
-                ENDDO
-                KGRADP=0.0_DP
-                DO idx=1,NUMBER_OF_DIMENSIONS
-                  KGRADP(idx) = GRADP(1)*PERM_TENSOR_OVER_VIS(idx,1)+ &
-                    & GRADP(2)*PERM_TENSOR_OVER_VIS(idx,2)+ &
-                    & GRADP(3)*PERM_TENSOR_OVER_VIS(idx,3)
-                ENDDO
-
-                GRADpGRADq_stable = KGRADP(1)*DFPDZ(parameter_idx,1)+&
-                  & KGRADP(2)*DFPDZ(parameter_idx,2)+ &
-                  & KGRADP(3)*DFPDZ(parameter_idx,3)
-
                 NONLINEAR_MATRICES%ELEMENT_RESIDUAL%VECTOR(element_dof_idx)= &
                   & NONLINEAR_MATRICES%ELEMENT_RESIDUAL%VECTOR(element_dof_idx)+ &
                   & GAUSS_WEIGHT*Jxxi*COMPONENT_QUADRATURE_SCHEME%GAUSS_BASIS_FNS(parameter_idx,1,gauss_idx)* &
-                  & (Jznu-1.0_DP)- &
-                  & (GAUSS_WEIGHT*Jxxi*vGRADphi)!+(0.5_DP*vGRADphi_stable*Jxxi*GAUSS_WEIGHT)+&
-                  !& (0.5_DP*GRADpGRADq_stable*Jxxi*GAUSS_WEIGHT)
+                  & (Jdot)
               
               ENDDO
             ELSEIF(HYDROSTATIC_COMPONENT_INTERPOLATION_TYPE==FIELD_ELEMENT_BASED_INTERPOLATION) THEN !element based
-              element_dof_idx=element_dof_idx+1
-              NONLINEAR_MATRICES%ELEMENT_RESIDUAL%VECTOR(element_dof_idx)= &
-                & NONLINEAR_MATRICES%ELEMENT_RESIDUAL%VECTOR(element_dof_idx)+GAUSS_WEIGHT*Jxxi* &
-                & (Jznu-1.0_DP)-GAUSS_WEIGHT*Jxxi*vGRADphi
+              !Will probably never be used
+              CALL FLAG_ERROR("Finite elasticity-Darcy with element based interpolation for pressure is not implemented.",ERR,ERROR,*999)
             ENDIF
             !Set the nonlinear-residual vector values for the eqns related to velcoity components to zero
             DO component_idx=(HYDROSTATIC_PRESSURE_COMPONENT+1),DEPENDENT_NUMBER_OF_COMPONENTS
@@ -2283,17 +2219,18 @@ CONTAINS
 
     CALL MATRIX_PRODUCT(DZDNU,PIOLA_TENSOR_EFF,TEMP,ERR,ERROR,*999)
     CALL MATRIX_PRODUCT(TEMP,DZDNUT,KIRCHOFF_TENSOR_EFF,ERR,ERROR,*999)
-    
-    !Compute total stress, including pressure component:
+
+    KIRCHOFF_TENSOR=0.0_DP
     KIRCHOFF_TENSOR(1,1) = KIRCHOFF_TENSOR_EFF(1,1)-P
-    KIRCHOFF_TENSOR(2,2) = KIRCHOFF_TENSOR_EFF(1,1)-P
-    KIRCHOFF_TENSOR(3,3) = KIRCHOFF_TENSOR_EFF(1,1)-P
-    KIRCHOFF_TENSOR(1,2) = KIRCHOFF_TENSOR_EFF(1,2)
-    KIRCHOFF_TENSOR(1,3) = KIRCHOFF_TENSOR_EFF(1,3)
+    KIRCHOFF_TENSOR(2,2) = KIRCHOFF_TENSOR_EFF(2,2)-P
+    KIRCHOFF_TENSOR(3,3) = KIRCHOFF_TENSOR_EFF(3,3)-P
     KIRCHOFF_TENSOR(2,3) = KIRCHOFF_TENSOR_EFF(2,3)
-    KIRCHOFF_TENSOR(2,1) = KIRCHOFF_TENSOR(1,2)
-    KIRCHOFF_TENSOR(3,1) = KIRCHOFF_TENSOR(1,3)
+    KIRCHOFF_TENSOR(1,3) = KIRCHOFF_TENSOR_EFF(1,3)
+    KIRCHOFF_TENSOR(1,2) = KIRCHOFF_TENSOR_EFF(1,2)
     KIRCHOFF_TENSOR(3,2) = KIRCHOFF_TENSOR(2,3)
+    KIRCHOFF_TENSOR(3,1) = KIRCHOFF_TENSOR(1,3)
+    KIRCHOFF_TENSOR(2,1) = KIRCHOFF_TENSOR(1,2)
+
 
     IF(DIAGNOSTICS1) THEN
       CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  ELEMENT_NUMBER = ",ELEMENT_NUMBER,ERR,ERROR,*999)
@@ -2319,7 +2256,7 @@ CONTAINS
 
   !>Evaluates df/dz (derivative of interpolation function wrt deformed coord) matrix at a given Gauss point
   SUBROUTINE COUPLED_ELASTICDARCY_GAUSS_DFDZ(INTERPOLATED_POINT,ELEMENT_NUMBER,GAUSS_POINT_NUMBER,NUMBER_OF_DIMENSIONS, &
-    & NUMBER_OF_XI,DFUDZ,DFPDZ,DFVDZ,ERR,ERROR,*)
+    & NUMBER_OF_XI,DFUDZ,DFPDZ,ERR,ERROR,*)
 
     !Argument variables
     TYPE(FIELD_INTERPOLATED_POINT_TYPE), POINTER :: INTERPOLATED_POINT !<Interpolated point for the dependent field
@@ -2327,7 +2264,7 @@ CONTAINS
     INTEGER(INTG), INTENT(IN) :: GAUSS_POINT_NUMBER !<The gauss point number
     INTEGER(INTG), INTENT(IN) :: NUMBER_OF_DIMENSIONS !<The number of dimensions
     INTEGER(INTG), INTENT(IN) :: NUMBER_OF_XI !<The number of xi directions for the interpolation
-    REAL(DP), INTENT(OUT) :: DFUDZ(:,:),DFPDZ(:,:),DFVDZ(:,:) !<On return, a matrix containing the derivatives of the basis functions wrt the deformed coordinates
+    REAL(DP), INTENT(OUT) :: DFUDZ(:,:),DFPDZ(:,:) !<On return, a matrix containing the derivatives of the basis functions wrt the deformed coordinates
     INTEGER(INTG), INTENT(OUT) :: ERR !<The error code
     TYPE(VARYING_STRING), INTENT(OUT) :: ERROR !<The error string
     !Local Variables
@@ -2336,9 +2273,8 @@ CONTAINS
     TYPE(QUADRATURE_SCHEME_TYPE), POINTER :: QUADRATURE_SCHEME
     INTEGER(INTG) :: NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS,derivative_idx,component_idx,xi_idx,parameter_idx 
     REAL(DP) :: DXIDZ(NUMBER_OF_DIMENSIONS,NUMBER_OF_DIMENSIONS),DZDXI(NUMBER_OF_DIMENSIONS,NUMBER_OF_DIMENSIONS)
-    REAL(DP) :: DPDXI(1,NUMBER_OF_DIMENSIONS),DVDXI(NUMBER_OF_DIMENSIONS,NUMBER_OF_DIMENSIONS)
-    REAL(DP) :: DXIDV(NUMBER_OF_DIMENSIONS,NUMBER_OF_DIMENSIONS)
-    REAL(DP) :: Jzxi,DFDXI((NUMBER_OF_DIMENSIONS*2+1),64,NUMBER_OF_XI)!temporary until a proper alternative is found
+    REAL(DP) :: DPDXI(1,NUMBER_OF_DIMENSIONS)
+    REAL(DP) :: Jzxi,DFDXI((NUMBER_OF_DIMENSIONS+1),64,NUMBER_OF_XI)!temporary until a proper alternative is found
     
     CALL ENTERS("COUPLED_ELASTICDARCY_GAUSS_DFDZ",ERR,ERROR,*999)
 
@@ -2346,7 +2282,6 @@ CONTAINS
     DFDXI=0.0_DP  ! DFDXI(component_idx,parameter_idx,xi_idx)
     DFUDZ=0.0_DP
     DFPDZ=0.0_DP
-    DFVDZ=0.0_DP
     DO component_idx=1,NUMBER_OF_DIMENSIONS !Always 3 spatial coordinates (3D)
       DO xi_idx=1,NUMBER_OF_XI !Thus always 3 element coordinates
         derivative_idx=PARTIAL_DERIVATIVE_FIRST_DERIVATIVE_MAP(xi_idx)  !2,4,7      
@@ -2358,7 +2293,7 @@ CONTAINS
     CALL INVERT(DZDXI,DXIDZ,Jzxi,ERR,ERROR,*999) !dxi/dz
 
     FIELD=>INTERPOLATED_POINT%INTERPOLATION_PARAMETERS%FIELD
-    DO component_idx=1,(NUMBER_OF_DIMENSIONS*2+1)
+    DO component_idx=1,(NUMBER_OF_DIMENSIONS+1)
       COMPONENT_BASIS=>FIELD%VARIABLES(1)%COMPONENTS(component_idx)%DOMAIN%TOPOLOGY%ELEMENTS% &
         & ELEMENTS(ELEMENT_NUMBER)%BASIS
       QUADRATURE_SCHEME=>COMPONENT_BASIS%QUADRATURE%QUADRATURE_SCHEME_MAP(BASIS_DEFAULT_QUADRATURE_SCHEME)%PTR
@@ -2398,29 +2333,13 @@ CONTAINS
       ENDDO
     ENDDO
 
-    !DPhi/DZ for velocity components
-    DO component_idx=1,NUMBER_OF_DIMENSIONS
-      COMPONENT_BASIS=>FIELD%VARIABLES(1)%COMPONENTS(component_idx+NUMBER_OF_DIMENSIONS+1)%DOMAIN%TOPOLOGY%ELEMENTS% &
-        & ELEMENTS(ELEMENT_NUMBER)%BASIS
-!       NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS=FIELD%VARIABLES(1)%COMPONENTS(component_idx)% &
-!         & MAX_NUMBER_OF_INTERPOLATION_PARAMETERS
-      NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS=COMPONENT_BASIS%NUMBER_OF_ELEMENT_PARAMETERS
-      DO parameter_idx=1,NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS
-        DO xi_idx=1,NUMBER_OF_XI
-          DFVDZ(parameter_idx,component_idx)= DFVDZ(parameter_idx,component_idx) + &
-            & DFDXI(component_idx+NUMBER_OF_DIMENSIONS+1,parameter_idx,xi_idx) * DXIDZ(xi_idx,component_idx)
-        ENDDO
-      ENDDO
-    ENDDO
-
-
-
     CALL EXITS("COUPLED_ELASTICDARCY_GAUSS_DFDZ")
     RETURN
 999 CALL ERRORS("COUPLED_ELASTICDARCY_GAUSS_DFDZ",ERR,ERROR)
     CALL EXITS("COUPLED_ELASTICDARCY_GAUSS_DFDZ")
     RETURN 1
   END SUBROUTINE COUPLED_ELASTICDARCY_GAUSS_DFDZ
+
 
   !
   !================================================================================================================================
