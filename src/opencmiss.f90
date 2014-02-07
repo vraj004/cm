@@ -3162,6 +3162,8 @@ MODULE OPENCMISS
   INTEGER(INTG), PARAMETER :: CMISS_FIELD_DELU10DELN_VARIABLE_TYPE = FIELD_DELU10DELN_VARIABLE_TYPE !<Normal derivative variable type i.e., du/dn \see OPENCMISS_FieldVariableTypes,OPENCMISS
   INTEGER(INTG), PARAMETER :: CMISS_FIELD_DELU10DELT_VARIABLE_TYPE = FIELD_DELU10DELT_VARIABLE_TYPE !<First time derivative variable type i.e., du/dt \see OPENCMISS_FieldVariableTypes,OPENCMISS
   INTEGER(INTG), PARAMETER :: CMISS_FIELD_DEL2U10DELT2_VARIABLE_TYPE = FIELD_DEL2U10DELT2_VARIABLE_TYPE !<Second time derivative variable type i.e., d^2u/dt^2 \see OPENCMISS_FieldVariableTypes,OPENCMISS
+  INTEGER(INTG), PARAMETER :: CMISS_FIELD_V1_VARIABLE_TYPE = FIELD_V1_VARIABLE_TYPE !<Standard variable type i.e., u \see OPENCMISS_FieldVariableTypes,OPENCMISS
+
   !>@}
   !> \addtogroup OPENCMISS_FieldDataTypes OPENCMISS::Field::DataTypes
   !> \brief Field data types
