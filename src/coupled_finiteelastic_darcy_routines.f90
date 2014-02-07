@@ -1243,7 +1243,7 @@ CONTAINS
     INTEGER(INTG) :: var2 ! Variable number corresponding to 'DELUDLEN' 
     INTEGER(INTG), POINTER :: EQUATIONS_SET_FIELD_DATA(:)
     REAL(DP) :: DZDNU(3,3),DZDNU_INV(3,3),AZL(3,3),AZU(3,3),I3,P,SECOND_PIOLA_TENSOR(3,3),TEMP(3,3),GRADP(3)
-    REAL(DP) :: FIRST_PIOLA_TENSOR(3,3),DZDNU_INV_T(3,3)
+    REAL(DP) :: FIRST_PIOLA_TENSOR(3,3),DZDNU_INV_T(3,3),DZDNUT
     REAL(DP) :: DFUDZ(64,3),DFPDZ(64,3),DFUDX(64,3),DFPDX(64,3) !temporary until a proper alternative is found
     REAL(DP) :: GAUSS_WEIGHT,Jznu,Jxxi,PERM_TENSOR_OVER_VIS(3,3), VIS_OVER_PERM_TENSOR(3,3),KGRADP(3)
     REAL(DP) :: DARCY_VOL_INCREASE,RHOs,RHOf,RHOo,POROSITY,DET_DZDNU  !coupling with Darcy model
@@ -1481,11 +1481,11 @@ CONTAINS
                       & GAUSS_WEIGHT*Jxxi*FIRST_PIOLA_TENSOR(component_idx,component_idx2)* &
                       & DFUDX(parameter_idx,component_idx2)
                     !adding the hydrostatic pressure component to the balance of momentum
-                    P=DEPENDENT_INTERPOLATED_POINT%VALUES(DEPENDENT_NUMBER_OF_COMPONENTS,1)
-                    NONLINEAR_MATRICES%ELEMENT_RESIDUAL%VECTOR(element_dof_idx)= &
-                      & NONLINEAR_MATRICES%ELEMENT_RESIDUAL%VECTOR(element_dof_idx)- &
-                      & GAUSS_WEIGHT*Jxxi*P*DZDNU_INV_T(component_idx,component_idx2)* &
-                      & DFUDX(parameter_idx,component_idx2)
+                    !P=DEPENDENT_INTERPOLATED_POINT%VALUES(DEPENDENT_NUMBER_OF_COMPONENTS,1)
+                    !NONLINEAR_MATRICES%ELEMENT_RESIDUAL%VECTOR(element_dof_idx)= &
+                    !  & NONLINEAR_MATRICES%ELEMENT_RESIDUAL%VECTOR(element_dof_idx)- &
+                    !  & GAUSS_WEIGHT*Jxxi*P*DZDNU_INV_T(component_idx,component_idx2)* &
+                    !  & DFUDX(parameter_idx,component_idx2)
                 
                   ENDDO ! component_idx2 (inner component index)
                 ENDDO ! parameter_idx (residual vector loop)
@@ -1637,12 +1637,17 @@ CONTAINS
               CALL FIELD_INTERPOLATE_GAUSS(FIRST_PART_DERIV,BASIS_DEFAULT_QUADRATURE_SCHEME,gauss_idx, &
                 & FIBRE_INTERPOLATED_POINT,ERR,ERROR,*999)
             END IF
-            !Calculate F=dZ/dNU, the deformation gradient tensor at the gauss point
+            !Calculate F=dZ/dNU, F*-1, F'*-1, Jznu at the gauss point 
             CALL COUPLED_ELASTICDARCY_GAUSS_DEFORMATION_GRADIENT_TENSOR(DEPENDENT_INTERPOLATED_POINT, &
               & GEOMETRIC_INTERPOLATED_POINT,FIBRE_INTERPOLATED_POINT,NUMBER_OF_DIMENSIONS, &
               & NUMBER_OF_XI,DZDNU,Jxxi,ERR,ERROR,*999)
             CALL MATRIX_INVERT(DZDNU,DZDNU_INV,DET_DZDNU,ERR,ERROR,*999)
             CALL MATRIX_TRANSPOSE(DZDNU_INV,DZDNU_INV_T,ERR,ERROR,*999)
+            CALL MATRIX_TRANSPOSE(DZDNU,DZDNUT,ERR,ERROR,*999)
+            CALL MATRIX_PRODUCT(DZDNUT,DZDNU,AZL,ERR,ERROR,*999)
+            CALL INVERT(AZL,AZU,I3,ERR,ERROR,*999)
+            Jznu=I3**0.5_DP
+
             !Calculate dPhi/dZ at the gauss point, Phi is the basis function
             CALL COUPLED_ELASTICDARCY_GAUSS_DFDZ(DEPENDENT_INTERPOLATED_POINT,ELEMENT_NUMBER,gauss_idx,NUMBER_OF_DIMENSIONS, &
               & NUMBER_OF_XI,DFUDZ,DFPDZ,ERR,ERROR,*999)
@@ -1672,7 +1677,7 @@ CONTAINS
               CALL INVERT(PERM_TENSOR_OVER_VIS,VIS_OVER_PERM_TENSOR,Jmat,ERR,ERROR,*999)
             ELSE
               VIS_OVER_PERM_TENSOR = 0.0_DP
-              DO idx_tensor=1,3
+              DO idx_tensor=1,NUMBER_OF_DIMENSIONS
                 VIS_OVER_PERM_TENSOR(idx_tensor,idx_tensor) = 1.0e10_DP
               END DO
             END IF
@@ -1696,6 +1701,8 @@ CONTAINS
             DO component_idx=1,NUMBER_OF_DIMENSIONS
               DEPENDENT_BASIS=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx)%DOMAIN%TOPOLOGY% &
                 & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
+              DEPENDENT_QUADRATURE_SCHEME=> & 
+                & DEPENDENT_BASIS%QUADRATURE%QUADRATURE_SCHEME_MAP(BASIS_DEFAULT_QUADRATURE_SCHEME)%PTR
               NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS=DEPENDENT_BASIS%NUMBER_OF_ELEMENT_PARAMETERS
               !loop over element interpolation parameters rows for 
               DO parameter_idx=1,NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS
@@ -1706,6 +1713,8 @@ CONTAINS
                 DO component_idx2 = 1,NUMBER_OF_DIMENSIONS
                   DEPENDENT_BASIS_TWO=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx2)%DOMAIN%TOPOLOGY% &
                 & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
+                  DEPENDENT_QUADRATURE_SCHEME_TWO=> & 
+                    & DEPENDENT_BASIS_TWO%QUADRATURE%QUADRATURE_SCHEME_MAP(BASIS_DEFAULT_QUADRATURE_SCHEME)%PTR
                   DO parameter_idx2=1,DEPENDENT_BASIS_TWO%NUMBER_OF_ELEMENT_PARAMETERS
                     jmatrix = jmatrix+1
                     PHIi=DEPENDENT_QUADRATURE_SCHEME_TWO%GAUSS_BASIS_FNS(parameter_idx2,NO_PART_DERIV,gauss_idx)
@@ -1727,6 +1736,9 @@ CONTAINS
                 IF(HYDROSTATIC_COMPONENT_INTERPOLATION_TYPE==FIELD_NODE_BASED_INTERPOLATION) THEN
                   DEPENDENT_BASIS_TWO=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx2)%DOMAIN%TOPOLOGY% &
                     & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
+                  DEPENDENT_QUADRATURE_SCHEME_TWO=> & 
+                    & DEPENDENT_BASIS_TWO%QUADRATURE%QUADRATURE_SCHEME_MAP(BASIS_DEFAULT_QUADRATURE_SCHEME)%PTR
+                  PHIi=DEPENDENT_QUADRATURE_SCHEME_TWO%GAUSS_BASIS_FNS(parameter_idx,NO_PART_DERIV,gauss_idx)
                   DO parameter_idx2=1,DEPENDENT_BASIS_TWO%NUMBER_OF_ELEMENT_PARAMETERS
                     jmatrix = jmatrix+1
                     IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
@@ -1735,7 +1747,8 @@ CONTAINS
                     ENDIF ! DAMPING_MATRIX
                     IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
                       STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
-                        & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
+                        & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)- &
+                        & RWG*DFUDX(parameter_idx,component_idx2)*DZDNU_INV_T(component_idx,component_idx2)*PHIi
                     ENDIF !Stiffness matrix
                     IF(MASS_MATRIX%UPDATE_MATRIX) THEN
                       MASS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
@@ -1760,6 +1773,8 @@ CONTAINS
             IF(HYDROSTATIC_COMPONENT_INTERPOLATION_TYPE==FIELD_NODE_BASED_INTERPOLATION) THEN
               DEPENDENT_BASIS=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx)%DOMAIN%TOPOLOGY% &
                 & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
+              DEPENDENT_QUADRATURE_SCHEME=> & 
+                & DEPENDENT_BASIS%QUADRATURE%QUADRATURE_SCHEME_MAP(BASIS_DEFAULT_QUADRATURE_SCHEME)%PTR
               NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS=DEPENDENT_BASIS%NUMBER_OF_ELEMENT_PARAMETERS
               !loop over element interpolation parameters rows for 
               DO parameter_idx=1,NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS
@@ -1771,7 +1786,7 @@ CONTAINS
                   DEPENDENT_BASIS_TWO=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx2)%DOMAIN%TOPOLOGY% &
                     & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
                   DEPENDENT_QUADRATURE_SCHEME_TWO=> &
-                  & DEPENDENT_BASIS_TWO%QUADRATURE%QUADRATURE_SCHEME_MAP(BASIS_DEFAULT_QUADRATURE_SCHEME)%PTR
+                    & DEPENDENT_BASIS_TWO%QUADRATURE%QUADRATURE_SCHEME_MAP(BASIS_DEFAULT_QUADRATURE_SCHEME)%PTR
                   DO parameter_idx2=1,DEPENDENT_BASIS_TWO%NUMBER_OF_ELEMENT_PARAMETERS
                     PHIi=DEPENDENT_QUADRATURE_SCHEME_TWO%GAUSS_BASIS_FNS(parameter_idx2,NO_PART_DERIV,gauss_idx)
                     jmatrix = jmatrix+1
@@ -1784,9 +1799,15 @@ CONTAINS
                         & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
                     ENDIF !Stiffness matrix
                     IF(MASS_MATRIX%UPDATE_MATRIX) THEN
+                      SUM = 0.0_DP
+                      DO idx_tensor=1,NUMBER_OF_DIMENSIONS
+                        SUM = SUM+ &
+                          & DZDNU_INV(component_idx2,idx_tensor)*PERM_TENSOR_OVER_VIS(component_idx2,idx_tensor)
+                      ENDDO
+
                       MASS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
                         & MASS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+ &
-                        & RWG*DFPDX(parameter_idx,component_idx2)*DZDNU_INV(component_idx)PERM/g*PHIi
+                        & RWG*DFPDX(parameter_idx,component_idx2)*SUM*PHIi/g
                     ENDIF !Mass matrix
                   ENDDO !parameter_idx2
                 ENDDO !displacement variable columns component_idx2
@@ -1795,7 +1816,6 @@ CONTAINS
                   & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
                 DEPENDENT_QUADRATURE_SCHEME_TWO=> &
                   & DEPENDENT_BASIS_TWO%QUADRATURE%QUADRATURE_SCHEME_MAP(BASIS_DEFAULT_QUADRATURE_SCHEME)%PTR
-
                 DO parameter_idx2=1,DEPENDENT_BASIS_TWO%NUMBER_OF_ELEMENT_PARAMETERS
                   PHIi=DEPENDENT_QUADRATURE_SCHEME_TWO%GAUSS_BASIS_FNS(parameter_idx2,NO_PART_DERIV,gauss_idx)
                   jmatrix = jmatrix+1
@@ -1804,9 +1824,15 @@ CONTAINS
                       & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
                   ENDIF ! DAMPING_MATRIX
                   IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
-                     STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
-                       & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+ &
-                       & 0.0_DP
+                    SUM = 0.0_DP
+                    DO idx_tensor=1,NUMBER_OF_DIMENSIONS
+                      SUM = SUM+ &
+                        & DZDNU_INV(component_idx2,idx_tensor)*PERM_TENSOR_OVER_VIS(component_idx2,idx_tensor)
+                    ENDDO     
+                    STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                      & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+ &
+                      & (RWG/RHOf*g)*DFPDX(parameter_idx,component_idx2)*SUM*DFPDZ(parameter_idx2,component_idx2)
+                      
                   ENDIF !Stiffness matrix
                   IF(MASS_MATRIX%UPDATE_MATRIX) THEN
                     MASS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
