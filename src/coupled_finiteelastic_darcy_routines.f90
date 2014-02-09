@@ -1447,11 +1447,10 @@ CONTAINS
             !Calculate FIRST_PIOLA_TENSOR = F*S
             CALL MATRIX_PRODUCT(DZDNU,SECOND_PIOLA_TENSOR,FIRST_PIOLA_TENSOR,ERR,ERROR,*999)
             !Calculate dPhi/dZ at the gauss point, Phi is the basis function
-            CALL COUPLED_ELASTICDARCY_GAUSS_DFDZ(DEPENDENT_INTERPOLATED_POINT,ELEMENT_NUMBER,gauss_idx,NUMBER_OF_DIMENSIONS, &
-              & NUMBER_OF_XI,DFUDZ,DFPDZ,ERR,ERROR,*999)
             !Calculate dPhi/dX at the gauss point, Phi is the basis function
-            CALL COUPLED_ELASTICDARCY_GAUSS_DFDZ(GEOMETRIC_INTERPOLATED_POINT,ELEMENT_NUMBER,gauss_idx,NUMBER_OF_DIMENSIONS, &
-              & NUMBER_OF_XI,DFUDX,DFPDX,ERR,ERROR,*999)
+            CALL COUPLED_ELASTICDARCY_GAUSS_DFDZ(GEOMETRIC_INTERPOLATED_POINT,DEPENDENT_INTERPOLATED_POINT,&
+              & ELEMENT_NUMBER,gauss_idx,NUMBER_OF_DIMENSIONS, &
+              & NUMBER_OF_XI,DFUDX,DFPDX,DFUDZ,DFPDZ,ERR,ERROR,*999)
 
             IF(DIAGNOSTICS1) THEN
               CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  Jznu = ",Jznu,ERR,ERROR,*999)
@@ -1660,11 +1659,10 @@ CONTAINS
             Jznu=I3**0.5_DP
 
             !Calculate dPhi/dZ at the gauss point, Phi is the basis function
-            CALL COUPLED_ELASTICDARCY_GAUSS_DFDZ(DEPENDENT_INTERPOLATED_POINT,ELEMENT_NUMBER,gauss_idx,NUMBER_OF_DIMENSIONS, &
-              & NUMBER_OF_XI,DFUDZ,DFPDZ,ERR,ERROR,*999)
             !Calculate dPhi/dX at the gauss point, Phi is the basis function
-            CALL COUPLED_ELASTICDARCY_GAUSS_DFDZ(GEOMETRIC_INTERPOLATED_POINT,ELEMENT_NUMBER,gauss_idx,NUMBER_OF_DIMENSIONS, &
-              & NUMBER_OF_XI,DFUDX,DFPDX,ERR,ERROR,*999)
+            CALL COUPLED_ELASTICDARCY_GAUSS_DFDZ(GEOMETRIC_INTERPOLATED_POINT,DEPENDENT_INTERPOLATED_POINT,&
+              & ELEMENT_NUMBER,gauss_idx,NUMBER_OF_DIMENSIONS, &
+              & NUMBER_OF_XI,DFUDX,DFPDX,DFUDZ,DFPDZ,ERR,ERROR,*999)
 
             !Calculate RWG.
             RWG=EQUATIONS%INTERPOLATION%GEOMETRIC_INTERP_POINT_METRICS(FIELD_U_VARIABLE_TYPE)%PTR%JACOBIAN* &
@@ -1745,17 +1743,21 @@ CONTAINS
                     & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
                   DEPENDENT_QUADRATURE_SCHEME_TWO=> & 
                     & DEPENDENT_BASIS_TWO%QUADRATURE%QUADRATURE_SCHEME_MAP(BASIS_DEFAULT_QUADRATURE_SCHEME)%PTR
-                  PHIi=DEPENDENT_QUADRATURE_SCHEME_TWO%GAUSS_BASIS_FNS(parameter_idx,NO_PART_DERIV,gauss_idx)
                   DO parameter_idx2=1,DEPENDENT_BASIS_TWO%NUMBER_OF_ELEMENT_PARAMETERS
+                    PHIi=DEPENDENT_QUADRATURE_SCHEME_TWO%GAUSS_BASIS_FNS(parameter_idx2,NO_PART_DERIV,gauss_idx)
                     jmatrix = jmatrix+1
                     IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
                       DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
                         & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
                     ENDIF ! DAMPING_MATRIX
                     IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
+                      SUM=0.0_DP
+                      DO idx_tensor=1,NUMBER_OF_DIMENSIONS
+                        SUM=SUM+DFUDX(parameter_idx,idx_tensor)*DZDNU_INV_T(component_idx,idx_tensor)
+                      ENDDO
                       STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
                         & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)- &
-                        & RWG*DFUDX(parameter_idx,component_idx2)*DZDNU_INV_T(component_idx,component_idx2)*PHIi
+                        & RWG*SUM*PHIi
                     ENDIF !Stiffness matrix
                     IF(MASS_MATRIX%UPDATE_MATRIX) THEN
                       MASS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
@@ -2177,26 +2179,28 @@ CONTAINS
   !
 
   !>Evaluates df/dz (derivative of interpolation function wrt deformed coord) matrix at a given Gauss point
-  SUBROUTINE COUPLED_ELASTICDARCY_GAUSS_DFDZ(INTERPOLATED_POINT,ELEMENT_NUMBER,GAUSS_POINT_NUMBER,NUMBER_OF_DIMENSIONS, &
-    & NUMBER_OF_XI,DFUDZ,DFPDZ,ERR,ERROR,*)
+  SUBROUTINE COUPLED_ELASTICDARCY_GAUSS_DFDZ(GEOMETRIC_INTERPOLATED_POINT,DEPENDENT_INTERPOLATED_POINT, &
+    & ELEMENT_NUMBER,GAUSS_POINT_NUMBER,NUMBER_OF_DIMENSIONS, &
+    & NUMBER_OF_XI,DFUDX,DFPDX,DFUDZ,DFPDZ,ERR,ERROR,*)
 
     !Argument variables
-    TYPE(FIELD_INTERPOLATED_POINT_TYPE), POINTER :: INTERPOLATED_POINT !<Interpolated point for the dependent field
+    TYPE(FIELD_INTERPOLATED_POINT_TYPE), POINTER :: GEOMETRIC_INTERPOLATED_POINT,DEPENDENT_INTERPOLATED_POINT !<Interpolated point for the dependent field
     INTEGER(INTG), INTENT(IN) :: ELEMENT_NUMBER !<The element number
     INTEGER(INTG), INTENT(IN) :: GAUSS_POINT_NUMBER !<The gauss point number
     INTEGER(INTG), INTENT(IN) :: NUMBER_OF_DIMENSIONS !<The number of dimensions
     INTEGER(INTG), INTENT(IN) :: NUMBER_OF_XI !<The number of xi directions for the interpolation
-    REAL(DP), INTENT(OUT) :: DFUDZ(:,:),DFPDZ(:,:) !<On return, a matrix containing the derivatives of the basis functions wrt the deformed coordinates
+    REAL(DP), INTENT(OUT) :: DFUDX(:,:),DFPDX(:,:),DFUDZ(:,:),DFPDZ(:,:) !<On return, a matrix containing the derivatives of the basis functions wrt the deformed coordinates
     INTEGER(INTG), INTENT(OUT) :: ERR !<The error code
     TYPE(VARYING_STRING), INTENT(OUT) :: ERROR !<The error string
     !Local Variables
     TYPE(BASIS_TYPE), POINTER :: COMPONENT_BASIS
-    TYPE(FIELD_TYPE), POINTER :: FIELD
+    TYPE(FIELD_TYPE), POINTER :: DEPENDENT_FIELD,GEOMETRIC_FIELD
     TYPE(QUADRATURE_SCHEME_TYPE), POINTER :: QUADRATURE_SCHEME
     INTEGER(INTG) :: NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS,derivative_idx,component_idx,xi_idx,parameter_idx 
     REAL(DP) :: DXIDZ(NUMBER_OF_DIMENSIONS,NUMBER_OF_DIMENSIONS),DZDXI(NUMBER_OF_DIMENSIONS,NUMBER_OF_DIMENSIONS)
     REAL(DP) :: DPDXI(1,NUMBER_OF_DIMENSIONS)
-    REAL(DP) :: Jzxi,DFDXI((NUMBER_OF_DIMENSIONS+1),64,NUMBER_OF_XI)!temporary until a proper alternative is found
+    REAL(DP) :: DXIDX(NUMBER_OF_DIMENSIONS,NUMBER_OF_DIMENSIONS),DXDXI(NUMBER_OF_DIMENSIONS,NUMBER_OF_DIMENSIONS)
+    REAL(DP) :: Jzxi,Jxxi,DFDXI((NUMBER_OF_DIMENSIONS+1),64,NUMBER_OF_XI)!temporary until a proper alternative is found
     
     CALL ENTERS("COUPLED_ELASTICDARCY_GAUSS_DFDZ",ERR,ERROR,*999)
 
@@ -2204,19 +2208,24 @@ CONTAINS
     DFDXI=0.0_DP  ! DFDXI(component_idx,parameter_idx,xi_idx)
     DFUDZ=0.0_DP
     DFPDZ=0.0_DP
+    DFUDX=0.0_DP
+    DFPDX=0.0_DP
     DO component_idx=1,NUMBER_OF_DIMENSIONS !Always 3 spatial coordinates (3D)
       DO xi_idx=1,NUMBER_OF_XI !Thus always 3 element coordinates
         derivative_idx=PARTIAL_DERIVATIVE_FIRST_DERIVATIVE_MAP(xi_idx)  !2,4,7      
-        DZDXI(component_idx,xi_idx)=INTERPOLATED_POINT%VALUES(component_idx,derivative_idx)  !dz/dxi
+        DZDXI(component_idx,xi_idx)=DEPENDENT_INTERPOLATED_POINT%VALUES(component_idx,derivative_idx)  !dz/dxi
+        DXDXI(component_idx,xi_idx)=GEOMETRIC_INTERPOLATED_POINT%VALUES(component_idx,derivative_idx)
       ENDDO
     ENDDO
 
 
     CALL INVERT(DZDXI,DXIDZ,Jzxi,ERR,ERROR,*999) !dxi/dz
+    CALL INVERT(DXDXI,DXIDX,Jxxi,ERR,ERROR,*999) !dxi/dx
 
-    FIELD=>INTERPOLATED_POINT%INTERPOLATION_PARAMETERS%FIELD
+    DEPENDENT_FIELD=>DEPENDENT_INTERPOLATED_POINT%INTERPOLATION_PARAMETERS%FIELD
+    GEOMETRIC_FIELD=>GEOMETRIC_INTERPOLATED_POINT%INTERPOLATION_PARAMETERS%FIELD
     DO component_idx=1,(NUMBER_OF_DIMENSIONS+1)
-      COMPONENT_BASIS=>FIELD%VARIABLES(1)%COMPONENTS(component_idx)%DOMAIN%TOPOLOGY%ELEMENTS% &
+      COMPONENT_BASIS=>DEPENDENT_FIELD%VARIABLES(1)%COMPONENTS(component_idx)%DOMAIN%TOPOLOGY%ELEMENTS% &
         & ELEMENTS(ELEMENT_NUMBER)%BASIS
       QUADRATURE_SCHEME=>COMPONENT_BASIS%QUADRATURE%QUADRATURE_SCHEME_MAP(BASIS_DEFAULT_QUADRATURE_SCHEME)%PTR
       DO parameter_idx=1,size(QUADRATURE_SCHEME%GAUSS_BASIS_FNS,1)
@@ -2227,9 +2236,9 @@ CONTAINS
         ENDDO
       ENDDO
     ENDDO
-    !DPhi/DZ for displacement components
+    !DPhi/DZ, DPhi/DX for displacement components
     DO component_idx=1,NUMBER_OF_DIMENSIONS
-      COMPONENT_BASIS=>FIELD%VARIABLES(1)%COMPONENTS(component_idx)%DOMAIN%TOPOLOGY%ELEMENTS% &
+      COMPONENT_BASIS=>DEPENDENT_FIELD%VARIABLES(1)%COMPONENTS(component_idx)%DOMAIN%TOPOLOGY%ELEMENTS% &
         & ELEMENTS(ELEMENT_NUMBER)%BASIS
 !       NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS=FIELD%VARIABLES(1)%COMPONENTS(component_idx)% &
 !         & MAX_NUMBER_OF_INTERPOLATION_PARAMETERS
@@ -2238,12 +2247,15 @@ CONTAINS
           DO xi_idx=1,NUMBER_OF_XI
             DFUDZ(parameter_idx,component_idx)= DFUDZ(parameter_idx,component_idx) + &
               & DFDXI(component_idx,parameter_idx,xi_idx) * DXIDZ(xi_idx,component_idx)
+            DFUDX(parameter_idx,component_idx)= DFUDX(parameter_idx,component_idx) + &
+              & DFDXI(component_idx,parameter_idx,xi_idx) * DXIDX(xi_idx,component_idx)
+
         ENDDO
       ENDDO
     ENDDO
 
     !hydrostatic pressure component interpolation scheme
-    COMPONENT_BASIS=>FIELD%VARIABLES(1)%COMPONENTS(NUMBER_OF_DIMENSIONS+1)%DOMAIN%TOPOLOGY%ELEMENTS% &
+    COMPONENT_BASIS=>DEPENDENT_FIELD%VARIABLES(1)%COMPONENTS(NUMBER_OF_DIMENSIONS+1)%DOMAIN%TOPOLOGY%ELEMENTS% &
       & ELEMENTS(ELEMENT_NUMBER)%BASIS
     NUMBER_OF_FIELD_COMPONENT_INTERPOLATION_PARAMETERS=COMPONENT_BASIS%NUMBER_OF_ELEMENT_PARAMETERS
     DO component_idx=1,NUMBER_OF_DIMENSIONS
@@ -2251,6 +2263,8 @@ CONTAINS
         DO xi_idx=1,NUMBER_OF_XI
           DFPDZ(parameter_idx,component_idx)= DFPDZ(parameter_idx,component_idx) + &
             & DFDXI(NUMBER_OF_DIMENSIONS+1,parameter_idx,xi_idx) * DXIDZ(xi_idx,component_idx)
+          DFPDX(parameter_idx,component_idx)= DFPDZ(parameter_idx,component_idx) + &
+            & DFDXI(NUMBER_OF_DIMENSIONS+1,parameter_idx,xi_idx) * DXIDX(xi_idx,component_idx)
         ENDDO
       ENDDO
     ENDDO
