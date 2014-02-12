@@ -460,7 +460,7 @@ CONTAINS
               SELECT CASE(EQUATIONS_SET%SUBTYPE)
               CASE(EQUATIONS_SET_ELASTICDARCY_ACTIVECONTRACTION_SUBTYPE)
                 NUMBER_OF_SOLIDCOMPONENTS = 2;
-                NUMBER_OF_FLUIDCOMPONENTS = 3;
+                NUMBER_OF_FLUIDCOMPONENTS = 5;
               CASE DEFAULT
                 LOCAL_ERROR="Equations set subtype "//TRIM(NUMBER_TO_VSTRING(EQUATIONS_SET%SUBTYPE,"*",ERR,ERROR))// &
                   & " is not valid for a finite elasticity equation type of an elasticity equation set class."
@@ -482,7 +482,9 @@ CONTAINS
 
                 !U variable type is constitutive law parameters
                 !V variable type has one component, solid density
-                !U1 has fluid permeability tensor property, viscosity, porosity/volume fraction in ref state
+                !U1 has fluid permeability tensor property, viscosity, porosity/volume fraction in ref state, acceleration due to gravity at which
+                ! hydraulic conductivity and permeability measures were taken (perm = hydraulic conductivity *(viscocity/(fluid density*g), fluid
+                ! density at which measures were taken.
                 !V1 has fluid density
 
                 CALL FIELD_NUMBER_OF_VARIABLES_SET_AND_LOCK(EQUATIONS_MATERIALS%MATERIALS_FIELD,4,ERR,ERROR,*999)
@@ -522,7 +524,7 @@ CONTAINS
                 ENDDO
 
 
-                !Darcy parameters: Permeability, K and fluid viscocity, mu and porosity/volfraction, phi
+                !Darcy parameters: Permeability, K and fluid viscocity, mu and porosity/volfraction, phi and g and rhof.
                 CALL FIELD_DIMENSION_SET_AND_LOCK(EQUATIONS_MATERIALS%MATERIALS_FIELD,FIELD_U1_VARIABLE_TYPE, &
                   & FIELD_VECTOR_DIMENSION_TYPE,ERR,ERROR,*999)
                 CALL FIELD_DATA_TYPE_SET_AND_LOCK(EQUATIONS_MATERIALS%MATERIALS_FIELD,FIELD_U1_VARIABLE_TYPE, &
@@ -1235,7 +1237,7 @@ CONTAINS
     TYPE(DOMAIN_MAPPING_TYPE), POINTER :: DOMAIN_ELEMENT_MAPPING
     TYPE(VARYING_STRING) :: LOCAL_ERROR
     INTEGER(INTG) :: component_idx,component_idx2,parameter_idx,gauss_idx,element_dof_idx,FIELD_VAR_TYPE,DARCY_FIELD_VAR_TYPE
-    INTEGER(INTG) :: idx,imatrix,jmatrix,Ncompartments,parameter_idx2,Kidx,global_element_idx,idx_tensor
+    INTEGER(INTG) :: idx,imatrix,jmatrix,Ncompartments,parameter_idx2,Kidx,global_element_idx,idx_tensor,idx2_tensor
     INTEGER(INTG) :: NDOFS,mh,last_jmatrix !,mhs
     INTEGER(INTG) :: DEPENDENT_NUMBER_OF_COMPONENTS
     INTEGER(INTG) :: NUMBER_OF_DIMENSIONS,NUMBER_OF_XI,HYDROSTATIC_PRESSURE_COMPONENT
@@ -1252,7 +1254,8 @@ CONTAINS
     REAL(DP) :: DFUDZ(64,3),DFPDZ(64,3),DFUDX(64,3),DFPDX(64,3) !temporary until a proper alternative is found
     REAL(DP) :: GAUSS_WEIGHT,Jznu,Jxxi,PERM_TENSOR_MOD(3,3),KGRADP(3)
     REAL(DP) :: DARCY_VOL_INCREASE,RHOs,RHOf,RHOo,POROSITY,DET_DZDNU  !coupling with Darcy model
-    REAL(DP) :: Mfact, bfact, p0fact,DARCY_K,DARCY_mu,PHIn,PHIi,RWG,Jmat,SUM,SUM2,DIV_VELOCITY,g_mag
+    REAL(DP) :: Mfact, bfact, p0fact,DARCY_K,DARCY_mu,PHIn,PHIi,RWG,Jmat,SUM,SUM2,DIV_VELOCITY
+    REAL(DP) :: g_measured, RHOf_measured
 
 
     CALL ENTERS("COUPLED_ELASTICDARCY_FINITE_ELEMENT_RESIDUAL_EVALUATE",ERR,ERROR,*999)
@@ -1574,7 +1577,7 @@ CONTAINS
         ENDIF
         
 
-        !Gravity loading term on the solid
+        !Gravity loading term on the total mixture and the fluid
         IF(ASSOCIATED(RHS_VECTOR)) THEN
           IF(ASSOCIATED(SOURCE_FIELD)) THEN
             IF(ASSOCIATED(MATERIALS_FIELD%VARIABLE_TYPE_MAP(FIELD_V_VARIABLE_TYPE)%PTR)) THEN
@@ -1613,10 +1616,17 @@ CONTAINS
                       & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
                     DO parameter_idx=1,DEPENDENT_BASIS%NUMBER_OF_ELEMENT_PARAMETERS
                       element_dof_idx=element_dof_idx+1
+ 
                       RHS_VECTOR%ELEMENT_VECTOR%VECTOR(element_dof_idx)=RHS_VECTOR%ELEMENT_VECTOR%VECTOR(element_dof_idx) + &
                         & RHOo*SOURCE_INTERPOLATED_POINT%VALUES(component_idx,1) * &
                         & DEPENDENT_QUADRATURE_SCHEME%GAUSS_BASIS_FNS(parameter_idx,NO_PART_DERIV,gauss_idx)*GAUSS_WEIGHT * &
                         & EQUATIONS%INTERPOLATION%GEOMETRIC_INTERP_POINT_METRICS(FIELD_U_VARIABLE_TYPE)%PTR%JACOBIAN
+
+                      RHS_VECTOR%ELEMENT_VECTOR%VECTOR(element_dof_idx)=RHS_VECTOR%ELEMENT_VECTOR%VECTOR(element_dof_idx) + &
+                        & RHOf*SOURCE_INTERPOLATED_POINT%VALUES(component_idx,1) * &
+                        & DEPENDENT_QUADRATURE_SCHEME%GAUSS_BASIS_FNS(parameter_idx,NO_PART_DERIV,gauss_idx)*GAUSS_WEIGHT * &
+                        & EQUATIONS%INTERPOLATION%GEOMETRIC_INTERP_POINT_METRICS(FIELD_U_VARIABLE_TYPE)%PTR%JACOBIAN
+
                     ENDDO
                   ENDDO
                 ENDDO !gauss_idx
@@ -1669,11 +1679,6 @@ CONTAINS
               & GAUSS_WEIGHT
 
             CALL FIELD_INTERPOLATE_GAUSS(NO_PART_DERIV,BASIS_DEFAULT_QUADRATURE_SCHEME,gauss_idx, &
-              & SOURCE_INTERPOLATED_POINT,ERR,ERROR,*999)
-            g_mag = SQRT(SOURCE_INTERPOLATED_POINT%VALUES(1,1)**2+SOURCE_INTERPOLATED_POINT%VALUES(2,1)**2+ &
-              & SOURCE_INTERPOLATED_POINT%VALUES(3,1)**2)
-
-            CALL FIELD_INTERPOLATE_GAUSS(NO_PART_DERIV,BASIS_DEFAULT_QUADRATURE_SCHEME,gauss_idx, &
               & DARCY_MATERIALS_INTERPOLATED_POINT,ERR,ERROR,*999)
         
             !calculate RHOo at gauss point
@@ -1687,6 +1692,8 @@ CONTAINS
               & DARCY_MATERIALS_INTERPOLATED_POINT,ERR,ERROR,*999)
             POROSITY=DARCY_MATERIALS_INTERPOLATED_POINT%VALUES(3,NO_PART_DERIV)
             RHOo = (RHOf*POROSITY)+((1.0_DP-POROSITY)*RHOs)
+            g_measured = DARCY_MATERIALS_INTERPOLATED_POINT%VALUES(4,NO_PART_DERIV)
+            RHOf_measured = DARCY_MATERIALS_INTERPOLATED_POINT%VALUES(5,NO_PART_DERIV)
 
             !Get the permeability, stored in the darcy material component
             DARCY_K = DARCY_MATERIALS_INTERPOLATED_POINT%VALUES(1,NO_PART_DERIV)
@@ -1694,9 +1701,9 @@ CONTAINS
             !set up permeability/viscocity tensor (see opencmiss documentation for equation details)
             !current assumption of isotropic permeability
             PERM_TENSOR_MOD=0.0_DP
-            PERM_TENSOR_MOD(1,1) = RHOf*g_mag*DARCY_K/DARCY_mu
-            PERM_TENSOR_MOD(2,2) = RHOf*g_mag*DARCY_K/DARCY_mu
-            PERM_TENSOR_MOD(3,3) = RHOf*g_mag*DARCY_K/DARCY_mu
+            PERM_TENSOR_MOD(1,1) = RHOf_measured*g_measured*DARCY_K/DARCY_mu
+            PERM_TENSOR_MOD(2,2) = RHOf_measured*g_measured*DARCY_K/DARCY_mu
+            PERM_TENSOR_MOD(3,3) = RHOf_measured*g_measured*DARCY_K/DARCY_mu
 
             !loop over field components
             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1810,13 +1817,14 @@ CONTAINS
                     IF(MASS_MATRIX%UPDATE_MATRIX) THEN
                       SUM = 0.0_DP
                       DO idx_tensor=1,NUMBER_OF_DIMENSIONS
-                        SUM = SUM+ &
-                          & DZDNU_INV(component_idx2,idx_tensor)*PERM_TENSOR_MOD(component_idx2,idx_tensor)
+                        DO idx2_tensor = 1,NUMBER_OF_DIMENSIONS
+                          SUM = SUM+ &
+                            & DZDNU_INV(idx_tensor,idx2_tensor)*PERM_TENSOR_MOD(idx_tensor,idx2_tensor)
+                        ENDDO
                       ENDDO
-
                       MASS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
                         & MASS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+ &
-                        & RWG*DFPDX(parameter_idx,component_idx2)*SUM*PHIi/g_mag
+                        & RWG*DFPDX(parameter_idx,component_idx2)*SUM*PHIi/g_measured
                     ENDIF !Mass matrix
                   ENDDO !parameter_idx2
                 ENDDO !displacement variable columns component_idx2
@@ -1836,11 +1844,12 @@ CONTAINS
                     SUM = 0.0_DP
                     DO idx_tensor=1,NUMBER_OF_DIMENSIONS
                       SUM = SUM+ &
-                        & DZDNU_INV(component_idx2,idx_tensor)*PERM_TENSOR_MOD(component_idx2,idx_tensor)
+                        & DZDNU_INV(idx_tensor)*PERM_TENSOR_MOD(idx_tensor)
                     ENDDO     
                     STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
                       & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+ &
-                      & (RWG/RHOf*g_mag)*Jznu*DFPDX(parameter_idx,component_idx2)*SUM*DFPDZ(parameter_idx2,component_idx2)
+                      & (RWG/RHOf_measured*g_measured)*Jznu &
+                      & *DFPDX(parameter_idx,component_idx2)*SUM*DFPDZ(parameter_idx2,component_idx2)
                       
                   ENDIF !Stiffness matrix
                   IF(MASS_MATRIX%UPDATE_MATRIX) THEN
