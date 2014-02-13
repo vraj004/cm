@@ -1547,8 +1547,7 @@ CONTAINS
                       CALL FLAG_ERROR("Can not pre-evaluate a residual for linear equations.",ERR,ERROR,*999)
                     CASE(EQUATIONS_NONLINEAR)
                       SELECT CASE(EQUATIONS%TIME_DEPENDENCE)
-                      CASE(EQUATIONS_STATIC,EQUATIONS_QUASISTATIC, &
-                        & EQUATIONS_FIRST_ORDER_DYNAMIC,EQUATIONS_SECOND_ORDER_DYNAMIC) ! quasistatic handled like static
+                      CASE(EQUATIONS_STATIC,EQUATIONS_QUASISTATIC,EQUATIONS_FIRST_ORDER_DYNAMIC) ! quasistatic handled like static
                         SELECT CASE(EQUATIONS_SET%SOLUTION_METHOD)
                         CASE(EQUATIONS_SET_FEM_SOLUTION_METHOD)
                           SELECT CASE(EQUATIONS_SET%CLASS)
@@ -1596,7 +1595,54 @@ CONTAINS
                             & " is invalid."
                           CALL FLAG_ERROR(LOCAL_ERROR,ERR,ERROR,*999)
                         END SELECT !EQUATIONS_SET%SOLUTION_METHOD
-                      !CASE(EQUATIONS_SECOND_ORDER_DYNAMIC)
+                      CASE(EQUATIONS_SECOND_ORDER_DYNAMIC)
+                        SELECT CASE(EQUATIONS_SET%SOLUTION_METHOD)
+                        CASE(EQUATIONS_SET_FEM_SOLUTION_METHOD)
+                          SELECT CASE(EQUATIONS_SET%CLASS)
+                          CASE(EQUATIONS_SET_ELASTICITY_CLASS)
+                            CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
+                          CASE(EQUATIONS_SET_FLUID_MECHANICS_CLASS)
+                            CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
+                          CASE(EQUATIONS_SET_ELECTROMAGNETICS_CLASS)
+                            CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
+                          CASE(EQUATIONS_SET_CLASSICAL_FIELD_CLASS)
+                            CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
+                          CASE(EQUATIONS_SET_BIOELECTRICS_CLASS)
+                            CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
+                          CASE(EQUATIONS_SET_MODAL_CLASS)
+                            CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
+                          CASE(EQUATIONS_SET_MULTI_PHYSICS_CLASS)
+                            !Pre residual evaluate not used
+                          CASE DEFAULT
+                            LOCAL_ERROR="Equations set class "//TRIM(NUMBER_TO_VSTRING(EQUATIONS_SET%CLASS,"*",ERR,ERROR))// &
+                              & " is not valid."
+                            CALL FLAG_ERROR(LOCAL_ERROR,ERR,ERROR,*999)
+                          END SELECT !EQUATIONS_SET%CLASS
+                        CASE(EQUATIONS_SET_NODAL_SOLUTION_METHOD)
+                          SELECT CASE(EQUATIONS_SET%CLASS)
+                          CASE(EQUATIONS_SET_FLUID_MECHANICS_CLASS)
+                            !Pre residual evaluate not used
+                          CASE DEFAULT
+                            LOCAL_ERROR="Equations set class "//TRIM(NUMBER_TO_VSTRING(EQUATIONS_SET%CLASS,"*",ERR,ERROR))// &
+                              & " is not valid."
+                            CALL FLAG_ERROR(LOCAL_ERROR,ERR,ERROR,*999)
+                          END SELECT !EQUATIONS_SET%CLASS
+                        CASE(EQUATIONS_SET_BEM_SOLUTION_METHOD)
+                          CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
+                        CASE(EQUATIONS_SET_FD_SOLUTION_METHOD)
+                          CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
+                        CASE(EQUATIONS_SET_FV_SOLUTION_METHOD)
+                          CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
+                        CASE(EQUATIONS_SET_GFEM_SOLUTION_METHOD)
+                          CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
+                        CASE(EQUATIONS_SET_GFV_SOLUTION_METHOD)
+                          CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
+                        CASE DEFAULT
+                          LOCAL_ERROR="The equations set solution method  of "// &
+                            & TRIM(NUMBER_TO_VSTRING(EQUATIONS_SET%SOLUTION_METHOD,"*",ERR,ERROR))// &
+                            & " is invalid."
+                          CALL FLAG_ERROR(LOCAL_ERROR,ERR,ERROR,*999)
+                        END SELECT !EQUATIONS_SET%SOLUTION_METHOD
                       !  CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
                       CASE(EQUATIONS_TIME_STEPPING)
                         CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
@@ -1681,8 +1727,7 @@ CONTAINS
                       CALL FLAG_ERROR("Can not post-evaluate a residual for linear equations.",ERR,ERROR,*999)
                     CASE(EQUATIONS_NONLINEAR)
                       SELECT CASE(EQUATIONS%TIME_DEPENDENCE)
-                      CASE(EQUATIONS_STATIC,EQUATIONS_QUASISTATIC, &
-                        & EQUATIONS_FIRST_ORDER_DYNAMIC,EQUATIONS_SECOND_ORDER_DYNAMIC) ! quasistatic handled like static
+                      CASE(EQUATIONS_STATIC,EQUATIONS_QUASISTATIC,EQUATIONS_FIRST_ORDER_DYNAMIC) ! quasistatic handled like static
                         SELECT CASE(EQUATIONS_SET%SOLUTION_METHOD)
                         CASE(EQUATIONS_SET_FEM_SOLUTION_METHOD)
                           SELECT CASE(EQUATIONS_SET%CLASS)
@@ -1730,8 +1775,52 @@ CONTAINS
                             & " is invalid."
                           CALL FLAG_ERROR(LOCAL_ERROR,ERR,ERROR,*999)
                         END SELECT !EQUATIONS_SET%SOLUTION_METHOD
-                      !CASE(EQUATIONS_SECOND_ORDER_DYNAMIC)
-                      !  CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
+                      CASE(EQUATIONS_SECOND_ORDER_DYNAMIC)
+                        SELECT CASE(EQUATIONS_SET%SOLUTION_METHOD)
+                        CASE(EQUATIONS_SET_FEM_SOLUTION_METHOD)
+                          SELECT CASE(EQUATIONS_SET%CLASS)
+                          CASE(EQUATIONS_SET_ELASTICITY_CLASS)
+                            CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
+                          CASE(EQUATIONS_SET_FLUID_MECHANICS_CLASS)
+                            CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
+                          CASE(EQUATIONS_SET_ELECTROMAGNETICS_CLASS)
+                            CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
+                          CASE(EQUATIONS_SET_CLASSICAL_FIELD_CLASS)
+                            CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
+                          CASE(EQUATIONS_SET_BIOELECTRICS_CLASS)
+                            CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
+                          CASE(EQUATIONS_SET_MULTI_PHYSICS_CLASS)
+                            !Post residual evaluate not used
+                          CASE DEFAULT
+                            LOCAL_ERROR="Equations set class "//TRIM(NUMBER_TO_VSTRING(EQUATIONS_SET%CLASS,"*",ERR,ERROR))// &
+                              & " is not valid."
+                            CALL FLAG_ERROR(LOCAL_ERROR,ERR,ERROR,*999)
+                          END SELECT !EQUATIONS_SET%CLASS
+                        CASE(EQUATIONS_SET_NODAL_SOLUTION_METHOD)
+                          SELECT CASE(EQUATIONS_SET%CLASS)
+                          CASE(EQUATIONS_SET_FLUID_MECHANICS_CLASS)
+                            !Post residual evaluate not used
+                          CASE DEFAULT
+                            LOCAL_ERROR="Equations set class "//TRIM(NUMBER_TO_VSTRING(EQUATIONS_SET%CLASS,"*",ERR,ERROR))// &
+                              & " is not valid with the nodal solution method."
+                            CALL FLAG_ERROR(LOCAL_ERROR,ERR,ERROR,*999)
+                          END SELECT !EQUATIONS_SET%CLASS
+                        CASE(EQUATIONS_SET_BEM_SOLUTION_METHOD)
+                          CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
+                        CASE(EQUATIONS_SET_FD_SOLUTION_METHOD)
+                          CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
+                        CASE(EQUATIONS_SET_FV_SOLUTION_METHOD)
+                          CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
+                        CASE(EQUATIONS_SET_GFEM_SOLUTION_METHOD)
+                          CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
+                        CASE(EQUATIONS_SET_GFV_SOLUTION_METHOD)
+                          CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
+                        CASE DEFAULT
+                          LOCAL_ERROR="The equations set solution method  of "// &
+                            & TRIM(NUMBER_TO_VSTRING(EQUATIONS_SET%SOLUTION_METHOD,"*",ERR,ERROR))// &
+                            & " is invalid."
+                          CALL FLAG_ERROR(LOCAL_ERROR,ERR,ERROR,*999)
+                        END SELECT !EQUATIONS_SET%SOLUTION_METHOD
                       CASE(EQUATIONS_TIME_STEPPING)
                         CALL FLAG_ERROR("Not implemented.",ERR,ERROR,*999)
                       CASE DEFAULT
