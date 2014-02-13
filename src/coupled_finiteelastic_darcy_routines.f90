@@ -1478,7 +1478,7 @@ CONTAINS
                 & '(17X,3(X,E13.6))',ERR,ERROR,*999)
             ENDIF
 
-            !Now add up the residual terms for the momentum balance equation 
+            !Now add up the residual terms for the momentum balance equation of total mixutre
             element_dof_idx=0
             DO component_idx=1,NUMBER_OF_DIMENSIONS
               DEPENDENT_COMPONENT_INTERPOLATION_TYPE=DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx)%INTERPOLATION_TYPE
@@ -1577,7 +1577,7 @@ CONTAINS
         ENDIF
         
 
-        !Gravity loading term on the total mixture and the fluid
+        !Gravity loading term on the total mixture and fluid
         IF(ASSOCIATED(RHS_VECTOR)) THEN
           IF(ASSOCIATED(SOURCE_FIELD)) THEN
             IF(ASSOCIATED(MATERIALS_FIELD%VARIABLE_TYPE_MAP(FIELD_V_VARIABLE_TYPE)%PTR)) THEN
@@ -1593,22 +1593,57 @@ CONTAINS
 
                 DO gauss_idx=1,DEPENDENT_NUMBER_OF_GAUSS_POINTS
                   GAUSS_WEIGHT=DEPENDENT_QUADRATURE_SCHEME%GAUSS_WEIGHTS(gauss_idx)
+                  !Interpolate dependent, geometric, fibre and materials fields
+                  CALL FIELD_INTERPOLATE_GAUSS(FIRST_PART_DERIV,BASIS_DEFAULT_QUADRATURE_SCHEME,gauss_idx, &
+                    & DEPENDENT_INTERPOLATED_POINT,ERR,ERROR,*999)
+                  CALL FIELD_INTERPOLATE_GAUSS(FIRST_PART_DERIV,BASIS_DEFAULT_QUADRATURE_SCHEME,gauss_idx, &
+                    & GEOMETRIC_INTERPOLATED_POINT,ERR,ERROR,*999)
+                  IF(ASSOCIATED(FIBRE_FIELD)) THEN
+                   CALL FIELD_INTERPOLATE_GAUSS(FIRST_PART_DERIV,BASIS_DEFAULT_QUADRATURE_SCHEME,gauss_idx, &
+                     & FIBRE_INTERPOLATED_POINT,ERR,ERROR,*999)
+                  END IF
+
+                 !Calculate F=dZ/dNU, F*-1, F'*-1, Jznu at the gauss point 
+                  CALL COUPLED_ELASTICDARCY_GAUSS_DEFORMATION_GRADIENT_TENSOR(DEPENDENT_INTERPOLATED_POINT, &
+                    & GEOMETRIC_INTERPOLATED_POINT,FIBRE_INTERPOLATED_POINT,NUMBER_OF_DIMENSIONS, &
+                    & NUMBER_OF_XI,DZDNU,Jxxi,ERR,ERROR,*999)
+                  CALL INVERT(DZDNU,DZDNU_INV,DET_DZDNU,ERR,ERROR,*999)
+
+                  !interpolate source field
                   CALL FIELD_INTERPOLATE_GAUSS(NO_PART_DERIV,BASIS_DEFAULT_QUADRATURE_SCHEME,gauss_idx, &
                     & SOURCE_INTERPOLATED_POINT,ERR,ERROR,*999)
-                  CALL FIELD_INTERPOLATE_GAUSS(FIRST_PART_DERIV,BASIS_DEFAULT_QUADRATURE_SCHEME,gauss_idx,EQUATIONS%INTERPOLATION% &
-                    & GEOMETRIC_INTERP_POINT(FIELD_U_VARIABLE_TYPE)%PTR,ERR,ERROR,*999)
+                  !interpolate solid density
                   CALL FIELD_INTERPOLATE_GAUSS(NO_PART_DERIV,BASIS_DEFAULT_QUADRATURE_SCHEME,gauss_idx, &
                     & RHOs_INTERPOLATED_POINT,ERR,ERROR,*999)
                   RHOs=RHOs_INTERPOLATED_POINT%VALUES(1,1)
+                  !fluid density
                   CALL FIELD_INTERPOLATE_GAUSS(NO_PART_DERIV,BASIS_DEFAULT_QUADRATURE_SCHEME,gauss_idx, &
                     & RHOf_INTERPOLATED_POINT,ERR,ERROR,*999)
                   RHOf=RHOf_INTERPOLATED_POINT%VALUES(1,1)
+                  !porosity,g_measured and RHOf_measured
                   CALL FIELD_INTERPOLATE_GAUSS(NO_PART_DERIV,BASIS_DEFAULT_QUADRATURE_SCHEME,gauss_idx, &
                     & DARCY_MATERIALS_INTERPOLATED_POINT,ERR,ERROR,*999)
                   POROSITY=DARCY_MATERIALS_INTERPOLATED_POINT%VALUES(3,NO_PART_DERIV)
                   RHOo = (RHOf*POROSITY)+((1.0_DP-POROSITY)*RHOs)
+                  g_measured = DARCY_MATERIALS_INTERPOLATED_POINT%VALUES(4,NO_PART_DERIV)
+                  RHOf_measured = DARCY_MATERIALS_INTERPOLATED_POINT%VALUES(5,NO_PART_DERIV)
+                  !Get the permeability, stored in the darcy material component
+                  DARCY_K = DARCY_MATERIALS_INTERPOLATED_POINT%VALUES(1,NO_PART_DERIV)
+                  DARCY_mu = DARCY_MATERIALS_INTERPOLATED_POINT%VALUES(2,NO_PART_DERIV)
+                  !set up permeability/viscocity tensor (see opencmiss documentation for equation details)
+                  !current assumption of isotropic permeability
+                  PERM_TENSOR_MOD=0.0_DP
+                  PERM_TENSOR_MOD(1,1) = RHOf_measured*g_measured*DARCY_K/DARCY_mu
+                  PERM_TENSOR_MOD(2,2) = RHOf_measured*g_measured*DARCY_K/DARCY_mu
+                  PERM_TENSOR_MOD(3,3) = RHOf_measured*g_measured*DARCY_K/DARCY_mu
+                  !Calculate dPhi/dZ at the gauss point, Phi is the basis function
+                  !Calculate dPhi/dX at the gauss point, Phi is the basis function
+                  CALL COUPLED_ELASTICDARCY_GAUSS_DFDZ(GEOMETRIC_INTERPOLATED_POINT,DEPENDENT_INTERPOLATED_POINT,&
+                    & ELEMENT_NUMBER,gauss_idx,NUMBER_OF_DIMENSIONS, &
+                    & NUMBER_OF_XI,DFUDX,DFPDX,DFUDZ,DFPDZ,ERR,ERROR,*999)
 
-                  CALL FIELD_INTERPOLATED_POINT_METRICS_CALCULATE(GEOMETRIC_BASIS%NUMBER_OF_XI,EQUATIONS%INTERPOLATION% &
+ 
+                 CALL FIELD_INTERPOLATED_POINT_METRICS_CALCULATE(GEOMETRIC_BASIS%NUMBER_OF_XI,EQUATIONS%INTERPOLATION% &
                     & GEOMETRIC_INTERP_POINT_METRICS(FIELD_U_VARIABLE_TYPE)%PTR,ERR,ERROR,*999)
                   element_dof_idx=0
                   DO component_idx=1,NUMBER_OF_DIMENSIONS
@@ -1616,19 +1651,33 @@ CONTAINS
                       & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
                     DO parameter_idx=1,DEPENDENT_BASIS%NUMBER_OF_ELEMENT_PARAMETERS
                       element_dof_idx=element_dof_idx+1
- 
                       RHS_VECTOR%ELEMENT_VECTOR%VECTOR(element_dof_idx)=RHS_VECTOR%ELEMENT_VECTOR%VECTOR(element_dof_idx) + &
                         & RHOo*SOURCE_INTERPOLATED_POINT%VALUES(component_idx,1) * &
                         & DEPENDENT_QUADRATURE_SCHEME%GAUSS_BASIS_FNS(parameter_idx,NO_PART_DERIV,gauss_idx)*GAUSS_WEIGHT * &
                         & EQUATIONS%INTERPOLATION%GEOMETRIC_INTERP_POINT_METRICS(FIELD_U_VARIABLE_TYPE)%PTR%JACOBIAN
-
-                      RHS_VECTOR%ELEMENT_VECTOR%VECTOR(element_dof_idx)=RHS_VECTOR%ELEMENT_VECTOR%VECTOR(element_dof_idx) + &
-                        & RHOf*SOURCE_INTERPOLATED_POINT%VALUES(component_idx,1) * &
-                        & DEPENDENT_QUADRATURE_SCHEME%GAUSS_BASIS_FNS(parameter_idx,NO_PART_DERIV,gauss_idx)*GAUSS_WEIGHT * &
-                        & EQUATIONS%INTERPOLATION%GEOMETRIC_INTERP_POINT_METRICS(FIELD_U_VARIABLE_TYPE)%PTR%JACOBIAN
-
+                    ENDDO !parameter_idx
+                  ENDDO !component_idx
+                  !body force on fluid alone.
+                  component_idx=NUMBER_OF_DIMENSIONS+1
+                  DEPENDENT_BASIS=>DEPENDENT_FIELD%VARIABLES(var1)%COMPONENTS(component_idx)%DOMAIN%TOPOLOGY% &
+                    & ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
+                  DO parameter_idx=1,DEPENDENT_BASIS%NUMBER_OF_ELEMENT_PARAMETERS
+                    element_dof_idx=element_dof_idx+1
+                    DO idx_tensor=1,NUMBER_OF_DIMENSIONS
+                      SUM=0.0_DP
+                      DO idx2_tensor=1,NUMBER_OF_DIMENSIONS
+                        SUM=SUM+ &
+                          & DZDNU_INV(idx_tensor,idx2_tensor)*PERM_TENSOR_MOD(idx2_tensor,idx_tensor)
+                      ENDDO
+                      !RHS_VECTOR%ELEMENT_VECTOR%VECTOR(element_dof_idx)=RHS_VECTOR%ELEMENT_VECTOR%VECTOR(element_dof_idx) - &
+                      !  & DFPDX(parameter_idx,idx_tensor)*SUM* &
+                      !  & SOURCE_INTERPOLATED_POINT(idx_tensor,1)*GAUSS_WEIGHT*Jxxi/g_measured
+                      RHS_VECTOR%ELEMENT_VECTOR%VECTOR(element_dof_idx)=RHS_VECTOR%ELEMENT_VECTOR%VECTOR(element_dof_idx) - &
+                        & SUM*SOURCE_INTERPOLATED_POINT%VALUES(idx_tensor,1) * &
+                        & DFPDX(parameter_idx,idx_tensor)*GAUSS_WEIGHT * &
+                        & Jxxi
                     ENDDO
-                  ENDDO
+                  ENDDO !parameter_idx
                 ENDDO !gauss_idx
               ENDIF
             ENDIF
@@ -1816,11 +1865,9 @@ CONTAINS
                     ENDIF !Stiffness matrix
                     IF(MASS_MATRIX%UPDATE_MATRIX) THEN
                       SUM = 0.0_DP
-                      DO idx_tensor=1,NUMBER_OF_DIMENSIONS
-                        DO idx2_tensor = 1,NUMBER_OF_DIMENSIONS
-                          SUM = SUM+ &
-                            & DZDNU_INV(idx_tensor,idx2_tensor)*PERM_TENSOR_MOD(idx_tensor,idx2_tensor)
-                        ENDDO
+                      DO idx_tensor = 1,NUMBER_OF_DIMENSIONS
+                        SUM = SUM+ &
+                          & DZDNU_INV(component_idx2,idx_tensor)*PERM_TENSOR_MOD(idx_tensor,component_idx2)
                       ENDDO
                       MASS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
                         & MASS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+ &
@@ -1841,16 +1888,18 @@ CONTAINS
                       & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
                   ENDIF ! DAMPING_MATRIX
                   IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
-                    SUM = 0.0_DP
                     DO idx_tensor=1,NUMBER_OF_DIMENSIONS
-                      SUM = SUM+ &
-                        & DZDNU_INV(idx_tensor)*PERM_TENSOR_MOD(idx_tensor)
-                    ENDDO     
-                    STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
-                      & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+ &
-                      & (RWG/RHOf_measured*g_measured)*Jznu &
-                      & *DFPDX(parameter_idx,component_idx2)*SUM*DFPDZ(parameter_idx2,component_idx2)
-                      
+                      SUM=0.0_DP
+                      DO idx2_tensor=1,NUMBER_OF_DIMENSIONS
+                        SUM = SUM+ &
+                          & DZDNU_INV(idx_tensor,idx2_tensor)*PERM_TENSOR_MOD(idx2_tensor,idx_tensor) &
+                          & *DFPDZ(parameter_idx2,idx2_tensor)
+                      ENDDO
+                        STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                          & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+ &
+                          & (RWG/RHOf_measured*g_measured)*Jznu &
+                          & *DFPDX(parameter_idx,idx_tensor)*SUM
+                    ENDDO
                   ENDIF !Stiffness matrix
                   IF(MASS_MATRIX%UPDATE_MATRIX) THEN
                     MASS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
