@@ -2331,7 +2331,7 @@ CONTAINS
         DO xi_idx=1,NUMBER_OF_XI
           DFPDZ(parameter_idx,component_idx)= DFPDZ(parameter_idx,component_idx) + &
             & DFDXI(NUMBER_OF_DIMENSIONS+1,parameter_idx,xi_idx) * DXIDZ(xi_idx,component_idx)
-          DFPDX(parameter_idx,component_idx)= DFPDZ(parameter_idx,component_idx) + &
+          DFPDX(parameter_idx,component_idx)= DFPDX(parameter_idx,component_idx) + &
             & DFDXI(NUMBER_OF_DIMENSIONS+1,parameter_idx,xi_idx) * DXIDX(xi_idx,component_idx)
         ENDDO
       ENDDO
