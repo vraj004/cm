@@ -2420,8 +2420,15 @@ CONTAINS
       DO xi_idx=1,NUMBER_OF_XI !Thus always 3 element coordinates
         derivative_idx=PARTIAL_DERIVATIVE_FIRST_DERIVATIVE_MAP(xi_idx)  !2,4,7      
         DudotDXI(component_idx,xi_idx) = PREV_VELOCITY_INTERPOLATED_POINT%VALUES(component_idx,derivative_idx)  !dudot/dxi
+        IF(DIAGNOSTICS1) THEN
+          CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  velocity component = ",component_idx,ERR,ERROR,*999)
+          CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  xi direction = ",component_idx,ERR,ERROR,*999)
+          CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE, &
+            & "  PRE_VELOCITY = ",PREV_VELOCITY_INTERPOLATED_POINT%VALUES(component_idx,derivative_idx),ERR,ERROR,*999)
+        ENDIF
       ENDDO
     ENDDO
+
 
     !DIV_VELOCITY
     DIV_VELOCITY = 0.0_DP
