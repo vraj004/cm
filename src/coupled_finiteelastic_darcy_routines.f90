@@ -1461,6 +1461,7 @@ CONTAINS
 
             IF(DIAGNOSTICS1) THEN
               CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  Jznu = ",Jznu,ERR,ERROR,*999)
+              CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  Jxxi = ",Jxxi,ERR,ERROR,*999)
               CALL WRITE_STRING_MATRIX(DIAGNOSTIC_OUTPUT_TYPE,1,1,3,1,1,3, &
                 & 3,3,DFUDZ,WRITE_STRING_MATRIX_NAME_AND_INDICES,'("    DFUDZ','(",I1,",:)',' :",3(X,E13.6))', &
                 & '(17X,3(X,E13.6))',ERR,ERROR,*999)
@@ -1521,6 +1522,10 @@ CONTAINS
 
             CALL COUPLED_ELASTICDARCY_GAUSS_DIV_VELOCITY(DEPENDENT_INTERPOLATED_POINT,PREV_VELOCITY_INTERP_POINT, &
               & NUMBER_OF_DIMENSIONS,NUMBER_OF_XI,DIV_VELOCITY,ERR,ERROR,*999)
+            IF(DIAGNOSTICS1) THEN
+              CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  div-udot = ",DIV_VELOCITY,ERR,ERROR,*999)
+            ENDIF
+
             !Add conservation of mass components of the residual vecotr
             HYDROSTATIC_PRESSURE_COMPONENT=NUMBER_OF_DIMENSIONS+1
             DEPENDENT_COMPONENT_INTERPOLATION_TYPE=DEPENDENT_FIELD%VARIABLES(var1)% &
@@ -1757,6 +1762,35 @@ CONTAINS
             PERM_TENSOR_MOD(1,1) = RHOf_measured*g_measured*DARCY_K/DARCY_mu
             PERM_TENSOR_MOD(2,2) = RHOf_measured*g_measured*DARCY_K/DARCY_mu
             PERM_TENSOR_MOD(3,3) = RHOf_measured*g_measured*DARCY_K/DARCY_mu
+
+            IF(DIAGNOSTICS1) THEN
+              CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  Jznu = ",Jznu,ERR,ERROR,*999)
+              CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  Jxxu = ",Jxxi,ERR,ERROR,*999)
+              CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  RWG = ",RWG,ERR,ERROR,*999)
+              CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  RHOs = ",RHOs,ERR,ERROR,*999)
+              CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  RHOf = ",RHOf,ERR,ERROR,*999)
+              CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  POROSITY = ",POROSITY,ERR,ERROR,*999)
+              CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  RHOo = ",RHOo,ERR,ERROR,*999)
+              CALL WRITE_STRING_MATRIX(DIAGNOSTIC_OUTPUT_TYPE,1,1,3,1,1,3, &
+                & 3,3,PERM_TENSOR_MOD,WRITE_STRING_MATRIX_NAME_AND_INDICES,&
+                & '("    PERM_TENSOR_MOD','(",I1,",:)',' :",3(X,E13.6))', &
+                & '(17X,3(X,E13.6))',ERR,ERROR,*999)
+
+              CALL WRITE_STRING_MATRIX(DIAGNOSTIC_OUTPUT_TYPE,1,1,3,1,1,3, &
+                & 3,3,DFUDZ,WRITE_STRING_MATRIX_NAME_AND_INDICES,'("    DFUDZ','(",I1,",:)',' :",3(X,E13.6))', &
+                & '(17X,3(X,E13.6))',ERR,ERROR,*999)
+              CALL WRITE_STRING_MATRIX(DIAGNOSTIC_OUTPUT_TYPE,1,1,3,1,1,3, &
+                & 3,3,DFPDZ,WRITE_STRING_MATRIX_NAME_AND_INDICES,'("    DFPDZ','(",I1,",:)',' :",3(X,E13.6))', &
+                & '(17X,3(X,E13.6))',ERR,ERROR,*999)
+
+              CALL WRITE_STRING_MATRIX(DIAGNOSTIC_OUTPUT_TYPE,1,1,3,1,1,3, &
+                & 3,3,DFUDX,WRITE_STRING_MATRIX_NAME_AND_INDICES,'("    DFUDX','(",I1,",:)',' :",3(X,E13.6))', &
+                & '(17X,3(X,E13.6))',ERR,ERROR,*999)
+              CALL WRITE_STRING_MATRIX(DIAGNOSTIC_OUTPUT_TYPE,1,1,3,1,1,3, &
+                & 3,3,DFPDX,WRITE_STRING_MATRIX_NAME_AND_INDICES,'("    DFPDX','(",I1,",:)',' :",3(X,E13.6))', &
+                & '(17X,3(X,E13.6))',ERR,ERROR,*999)
+
+            ENDIF
 
             !loop over field components
             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
