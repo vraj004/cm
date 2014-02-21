@@ -261,6 +261,14 @@ MODULE FIELD_ROUTINES
   INTEGER(INTG), PARAMETER :: FIELD_NONGEOMETRIC_COMPONENTS_TYPE=3 !<The field is interpolated for non-geometric components \see FIELD_ROUTINES_InterpolationComponentsTypes,FIELD_ROUTINES
   !>@}
 
+  !> \addtogroup FIELD_ROUTINES_FieldOperationTypes FIELD_ROUTINES::FieldOperationTypes
+  !> \brief Field interpolation components types
+  !> \see FIELD_ROUTINES
+  !>@{
+  INTEGER(INTG), PARAMETER :: FIELD_ADD_TO_TYPE=1 !<Values are added to the field \see FIELD_ROUTINES_FieldOperationTypes,FIELD_ROUTINES
+  INTEGER(INTG), PARAMETER :: FIELD_ADD_UPDATE_TYPE=2 !<The field is set to the added values \see FIELD_ROUTINES_FieldOperationTypes,FIELD_ROUTINES
+  !>@}
+
   !Module types
 
   !Module variables
@@ -572,7 +580,7 @@ MODULE FIELD_ROUTINES
     & FIELD_GRID_POINT_BASED_INTERPOLATION,FIELD_GAUSS_POINT_BASED_INTERPOLATION,FIELD_DATA_POINT_BASED_INTERPOLATION
 
   PUBLIC FIELD_CONSTANT_DOF_TYPE,FIELD_ELEMENT_DOF_TYPE,FIELD_NODE_DOF_TYPE,FIELD_GRID_POINT_DOF_TYPE,FIELD_GAUSS_POINT_DOF_TYPE, &
-    & FIELD_DATA_POINT_DOF_TYPE
+    & FIELD_DATA_POINT_DOF_TYPE,FIELD_ADD_TO_TYPE,FIELD_ADD_UPDATE_TYPE
 
   PUBLIC FIELD_NUMBER_OF_VARIABLE_TYPES,FIELD_NUMBER_OF_VARIABLE_SUBTYPES,FIELD_NUMBER_OF_SET_TYPES, &
     & FIELD_U_VARIABLE_TYPE,FIELD_DELUDELN_VARIABLE_TYPE,FIELD_DELUDELT_VARIABLE_TYPE, &
@@ -12548,7 +12556,8 @@ CONTAINS
   !
 
   !>Adds the alpha times the parameter set values from one parameter set type to another parameter set type \todo make this call distributed vector add??? 
-  SUBROUTINE FIELD_PARAMETER_SETS_ADD_DP(FIELD,VARIABLE_TYPE,ALPHA,FIELD_FROM_SET_TYPE,FIELD_TO_SET_TYPE,ERR,ERROR,*)
+  SUBROUTINE FIELD_PARAMETER_SETS_ADD_DP(FIELD,VARIABLE_TYPE,ALPHA,FIELD_FROM_SET_TYPE,FIELD_TO_SET_TYPE, &
+    & OPERATOR_TYPE,ERR,ERROR,*)
 
     !Argument variables
     TYPE(FIELD_TYPE), POINTER :: FIELD !<A pointer to the field to add the parameter sets for
@@ -12556,6 +12565,7 @@ CONTAINS
     REAL(DP), INTENT(IN) :: ALPHA(:) !<The multiplicative factor for the add.
     INTEGER(INTG), INTENT(IN) :: FIELD_FROM_SET_TYPE(:) !<The field parameter set identifier to add the parameters from \see FIELD_ROUTINES_ParameterSetTypes,FIELD_ROUTINES
     INTEGER(INTG), INTENT(IN) :: FIELD_TO_SET_TYPE !<The field parameter set identifier to add the parameters to \see FIELD_ROUTINES_ParameterSetTypes,FIELD_ROUTINES
+    INTEGER(INTG), INTENT(IN) :: OPERATOR_TYPE !Set whether to add to the FIELD_ADD_TO_TYPE or set the FIELD_ADD_UPDATE_TYPE, the sum of the FIELD_FROM_SET_TYPES
     INTEGER(INTG), INTENT(OUT) :: ERR !<The error code
     TYPE(VARYING_STRING), INTENT(OUT) :: ERROR !<The error string
     !Local Variables
@@ -12613,7 +12623,22 @@ CONTAINS
                     DO parameter_set_idx=1,SIZE(FIELD_FROM_SET_TYPE,1)
                       VALUE=VALUE+ALPHA(parameter_set_idx)*FIELD_FROM_PARAMETERS(parameter_set_idx)%PTR(dof_idx)
                     ENDDO !parameter_set_idx
-                    CALL DISTRIBUTED_VECTOR_VALUES_ADD(FIELD_TO_PARAMETER_SET%PARAMETERS,dof_idx,VALUE,ERR,ERROR,*999)
+                    IF(OPERATOR_TYPE.EQ.FIELD_ADD_TO_TYPE) THEN
+                      CALL DISTRIBUTED_VECTOR_VALUES_ADD(FIELD_TO_PARAMETER_SET%PARAMETERS,dof_idx,VALUE,ERR,ERROR,*999)
+                    ELSE IF(OPERATOR_TYPE.EQ.FIELD_ADD_UPDATE_TYPE) THEN
+                      CALL DISTRIBUTED_VECTOR_VALUES_SET(FIELD_TO_PARAMETER_SET%PARAMETERS,dof_idx,VALUE,ERR,ERROR,*999)
+                    ELSE
+                      LOCAL_ERROR="The operator type of ("//TRIM(NUMBER_TO_VSTRING(OPERATOR_TYPE,"*",ERR,ERROR))// &
+                        & ") is invalid."
+                      CALL FLAG_ERROR(LOCAL_ERROR,ERR,ERROR,*999)
+                    ENDIF
+                    IF(DIAGNOSTICS1) THEN
+                      CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE, &
+                        & "  FIELD DOF IDX = ",dof_idx,ERR,ERROR,*999)
+                      CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE, &
+                        & "  ADDED VALUE = ",VALUE,ERR,ERROR,*999)
+
+                    ENDIF
                   ENDDO !dof_idx
                   !Restore the from parameter set transfer
                   DO parameter_set_idx=1,SIZE(FIELD_FROM_SET_TYPE,1)
@@ -12668,7 +12693,8 @@ CONTAINS
   !
 
   !>Adds the alpha times the parameter set values from one parameter set type to another parameter set type \todo make this call distributed vector add???
-  SUBROUTINE FIELD_PARAMETER_SETS_ADD_DP1(FIELD,VARIABLE_TYPE,ALPHA,FIELD_FROM_SET_TYPE,FIELD_TO_SET_TYPE,ERR,ERROR,*)
+  SUBROUTINE FIELD_PARAMETER_SETS_ADD_DP1(FIELD,VARIABLE_TYPE,ALPHA,FIELD_FROM_SET_TYPE,FIELD_TO_SET_TYPE, &
+    & OPERATOR_TYPE,ERR,ERROR,*)
 
     !Argument variables
     TYPE(FIELD_TYPE), POINTER :: FIELD !<A pointer to the field to add the parameter sets for
@@ -12676,13 +12702,15 @@ CONTAINS
     REAL(DP), INTENT(IN) :: ALPHA !<The multiplicative factor for the add.
     INTEGER(INTG), INTENT(IN) :: FIELD_FROM_SET_TYPE !<The field parameter set identifier to add the parameters from
     INTEGER(INTG), INTENT(IN) :: FIELD_TO_SET_TYPE !<The field parameter set identifier to add the parameters to
+    INTEGER(INTG), INTENT(IN) :: OPERATOR_TYPE !<Set whether to add to the FIELD_ADD_TO_TYPE or set the FIELD_ADD_UPDATE_TYPE, the sum of the FIELD_FROM_SET_TYPES
     INTEGER(INTG), INTENT(OUT) :: ERR !<The error code
     TYPE(VARYING_STRING), INTENT(OUT) :: ERROR !<The error string
     !Local Variables
 
     CALL ENTERS("FIELD_PARAMETER_SETS_ADD_DP1",ERR,ERROR,*999)
     
-    CALL FIELD_PARAMETER_SETS_ADD_DP(FIELD,VARIABLE_TYPE,[ALPHA],[FIELD_FROM_SET_TYPE],FIELD_TO_SET_TYPE,ERR,ERROR,*999)
+    CALL FIELD_PARAMETER_SETS_ADD_DP(FIELD,VARIABLE_TYPE,[ALPHA],[FIELD_FROM_SET_TYPE],FIELD_TO_SET_TYPE, &
+      & OPERATOR_TYPE,ERR,ERROR,*999)
     
     CALL EXITS("FIELD_PARAMETER_SETS_ADD_DP1")
     RETURN

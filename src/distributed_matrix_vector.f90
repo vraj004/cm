@@ -5595,7 +5595,7 @@ CONTAINS
     TYPE(VARYING_STRING), INTENT(OUT) :: ERROR !<The error string
     !Local Variables
     TYPE(VARYING_STRING) :: LOCAL_ERROR
-    
+    INTEGER(INTG) :: idx
     CALL ENTERS("DISTRIBUTED_VECTOR_COPY_DP",ERR,ERROR,*999)
 
     IF(ASSOCIATED(FROM_VECTOR)) THEN
@@ -5612,6 +5612,14 @@ CONTAINS
                       IF(ASSOCIATED(TO_VECTOR%CMISS)) THEN
                         IF(ASSOCIATED(FROM_VECTOR%DOMAIN_MAPPING,TO_VECTOR%DOMAIN_MAPPING)) THEN
                           TO_VECTOR%CMISS%DATA_DP(1:TO_VECTOR%CMISS%N)=ALPHA*FROM_VECTOR%CMISS%DATA_DP(1:FROM_VECTOR%CMISS%N)
+                          IF(DIAGNOSTICS5) THEN
+                            CALL WRITE_STRING(DIAGNOSTIC_OUTPUT_TYPE," COPIED VALUES",ERR,ERROR,*999)
+                            DO idx=1,TO_VECTOR%CMISS%N
+                              CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE," IDX=",idx,ERR,ERROR,*999)
+                              CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE," VALUE = ",TO_VECTOR%CMISS%DATA_DP(idx), &
+                                & ERR,ERROR,*999)
+                            ENDDO
+                          ENDIF
                         ELSE
                           CALL FLAG_ERROR("The from vector does not have the same domain mapping as the to vector.",ERR,ERROR,*999)
                         ENDIF

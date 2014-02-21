@@ -459,7 +459,7 @@ CONTAINS
             IF(ASSOCIATED(EQUATIONS_MATERIALS)) THEN
               SELECT CASE(EQUATIONS_SET%SUBTYPE)
               CASE(EQUATIONS_SET_ELASTICDARCY_ACTIVECONTRACTION_SUBTYPE)
-                NUMBER_OF_SOLIDCOMPONENTS = 2;
+                NUMBER_OF_SOLIDCOMPONENTS = 3;
                 NUMBER_OF_FLUIDCOMPONENTS = 5;
               CASE DEFAULT
                 LOCAL_ERROR="Equations set subtype "//TRIM(NUMBER_TO_VSTRING(EQUATIONS_SET%SUBTYPE,"*",ERR,ERROR))// &
@@ -1258,8 +1258,8 @@ CONTAINS
     REAL(DP) :: DFUDZ(64,3),DFPDZ(64,3),DFUDX(64,3),DFPDX(64,3) !temporary until a proper alternative is found
     REAL(DP) :: GAUSS_WEIGHT,Jznu,Jxxi,PERM_TENSOR_MOD(3,3),KGRADP(3)
     REAL(DP) :: DARCY_VOL_INCREASE,RHOs,RHOf,RHOo,POROSITY,DET_DZDNU  !coupling with Darcy model
-    REAL(DP) :: Mfact, bfact, p0fact,DARCY_K,DARCY_mu,PHIn,PHIi,RWG,Jmat,SUM,SUM2,DIV_VELOCITY
-    REAL(DP) :: g_measured, RHOf_measured
+    REAL(DP) :: Mfact, bfact, p0fact,DARCY_K,DARCY_mu,PHIn,PHIi,RWG,Jmat,SUM,SUM2,DIV_VELOCITY,rayleigh_beta
+    REAL(DP) :: g_measured, RHOf_measured,viscous_damping,lame_mu,lame_lambda,lame_mu_eff,lame_lambda_eff
 
 
     CALL ENTERS("COUPLED_ELASTICDARCY_FINITE_ELEMENT_RESIDUAL_EVALUATE",ERR,ERROR,*999)
@@ -1477,7 +1477,7 @@ CONTAINS
                 & '(17X,3(X,E13.6))',ERR,ERROR,*999)
 
               CALL WRITE_STRING_MATRIX(DIAGNOSTIC_OUTPUT_TYPE,1,1,3,1,1,3, &
-                & 3,3,SECOND_PIOLA_TENSOR, &
+                & 3,3,FIRST_PIOLA_TENSOR, &
                 & WRITE_STRING_MATRIX_NAME_AND_INDICES, &
                 & '("    FIRST_PIOLA_TENSOR','(",I1,",:)',' :",3(X,E13.6))', &
                 & '(17X,3(X,E13.6))',ERR,ERROR,*999)
@@ -1695,6 +1695,12 @@ CONTAINS
           CALL FLAG_ERROR("RHS vector is not associated.",ERR,ERROR,*999)
         ENDIF
 
+        !Grab solid parameters
+        MATERIALS_INTERPOLATION_PARAMETERS=>EQUATIONS%INTERPOLATION%MATERIALS_INTERP_PARAMETERS(FIELD_U_VARIABLE_TYPE)%PTR
+        CALL FIELD_INTERPOLATION_PARAMETERS_ELEMENT_GET(FIELD_VALUES_SET_TYPE,ELEMENT_NUMBER, &
+          & MATERIALS_INTERPOLATION_PARAMETERS,ERR,ERROR,*999)
+        MATERIALS_INTERPOLATED_POINT=>EQUATIONS%INTERPOLATION%MATERIALS_INTERP_POINT(FIELD_U_VARIABLE_TYPE)%PTR
+
         !DARCY FLUID MASS, DAMPING AND STIFFNESS TERMS
         !Grab material interpolation parameters for the fluid mech properties variable type
         DARCY_MATERIALS_INTERPOLATION_PARAMETERS=>EQUATIONS%INTERPOLATION%MATERIALS_INTERP_PARAMETERS(FIELD_U1_VARIABLE_TYPE)%PTR
@@ -1715,6 +1721,7 @@ CONTAINS
               CALL FIELD_INTERPOLATE_GAUSS(FIRST_PART_DERIV,BASIS_DEFAULT_QUADRATURE_SCHEME,gauss_idx, &
                 & FIBRE_INTERPOLATED_POINT,ERR,ERROR,*999)
             END IF
+
             !Calculate F=dZ/dNU, F*-1, F'*-1, Jznu at the gauss point 
             CALL COUPLED_ELASTICDARCY_GAUSS_DEFORMATION_GRADIENT_TENSOR(DEPENDENT_INTERPOLATED_POINT, &
               & GEOMETRIC_INTERPOLATED_POINT,FIBRE_INTERPOLATED_POINT,NUMBER_OF_DIMENSIONS, &
@@ -1735,6 +1742,16 @@ CONTAINS
             !Calculate RWG.
             RWG=EQUATIONS%INTERPOLATION%GEOMETRIC_INTERP_POINT_METRICS(FIELD_U_VARIABLE_TYPE)%PTR%JACOBIAN* &
               & GAUSS_WEIGHT
+
+            !grab solid material properties term
+            CALL FIELD_INTERPOLATE_GAUSS(NO_PART_DERIV,BASIS_DEFAULT_QUADRATURE_SCHEME,gauss_idx, &
+              & MATERIALS_INTERPOLATED_POINT,ERR,ERROR,*999)
+            lame_mu = MATERIALS_INTERPOLATED_POINT%VALUES(1,1)
+            lame_lambda = MATERIALS_INTERPOLATED_POINT%VALUES(2,1)
+            viscous_damping = MATERIALS_INTERPOLATED_POINT%VALUES(3,1)
+            lame_mu_eff = (lame_mu-(lame_lambda*LOG(Jznu)))/Jznu
+            lame_lambda_eff = lame_lambda/Jznu
+            rayleigh_beta = 0.1_DP
 
             CALL FIELD_INTERPOLATE_GAUSS(NO_PART_DERIV,BASIS_DEFAULT_QUADRATURE_SCHEME,gauss_idx, &
               & DARCY_MATERIALS_INTERPOLATED_POINT,ERR,ERROR,*999)
@@ -1770,6 +1787,10 @@ CONTAINS
               CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  RHOs = ",RHOs,ERR,ERROR,*999)
               CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  RHOf = ",RHOf,ERR,ERROR,*999)
               CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  POROSITY = ",POROSITY,ERR,ERROR,*999)
+              CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  lambda_eff = ",lame_lambda_eff,ERR,ERROR,*999)
+              CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  mu_eff = ",lame_mu_eff,ERR,ERROR,*999)
+              CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  rayleigh alpha = ",viscous_damping,ERR,ERROR,*999)
+              CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  rayleigh beta = ",rayleigh_beta,ERR,ERROR,*999)
               CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  RHOo = ",RHOo,ERR,ERROR,*999)
               CALL WRITE_STRING_MATRIX(DIAGNOSTIC_OUTPUT_TYPE,1,1,3,1,1,3, &
                 & 3,3,PERM_TENSOR_MOD,WRITE_STRING_MATRIX_NAME_AND_INDICES,&
@@ -1817,10 +1838,6 @@ CONTAINS
                   DO parameter_idx2=1,DEPENDENT_BASIS_TWO%NUMBER_OF_ELEMENT_PARAMETERS
                     jmatrix = jmatrix+1
                     PHIi=DEPENDENT_QUADRATURE_SCHEME_TWO%GAUSS_BASIS_FNS(parameter_idx2,NO_PART_DERIV,gauss_idx)
-                    IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
-                      DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
-                        & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
-                    ENDIF ! DAMPING_MATRIX
                     IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
                       STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
                         & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
@@ -1829,6 +1846,15 @@ CONTAINS
                       MASS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
                         & MASS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+PHIn*RHOo*PHIi*RWG
                     ENDIF !Mass matrix
+                    IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN 
+                      !damping due to viscous damping term 
+                      !HARD CODING RAYLEIGH DAMPING - C = alphaM+betaK
+
+                      DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                        & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+ &
+                        & viscous_damping*PHIn*RHOo*PHIi*RWG
+                    ENDIF ! DAMPING_MATRIX
+
                   ENDDO !parameter_idx2
                 ENDDO!component_idx2
                 component_idx2=HYDROSTATIC_PRESSURE_COMPONENT
@@ -1840,10 +1866,6 @@ CONTAINS
                   DO parameter_idx2=1,DEPENDENT_BASIS_TWO%NUMBER_OF_ELEMENT_PARAMETERS
                     PHIi=DEPENDENT_QUADRATURE_SCHEME_TWO%GAUSS_BASIS_FNS(parameter_idx2,NO_PART_DERIV,gauss_idx)
                     jmatrix = jmatrix+1
-                    IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
-                      DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
-                        & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
-                    ENDIF ! DAMPING_MATRIX
                     IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
                       SUM=0.0_DP
                       DO idx_tensor=1,NUMBER_OF_DIMENSIONS
@@ -1857,6 +1879,14 @@ CONTAINS
                       MASS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
                         & MASS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
                     ENDIF !Mass matrix
+                    IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
+                      !damping due to viscous damping term 
+                      !HARD CODING RAYLEIGH DAMPING - C = alphaM+betaK
+                      DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                        & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)- &
+                        & rayleigh_beta*RWG*SUM*PHIi
+                    ENDIF ! DAMPING_MATRIX
+
                   ENDDO !parameter_idx2
                 ELSEIF(HYDROSTATIC_COMPONENT_INTERPOLATION_TYPE==FIELD_ELEMENT_BASED_INTERPOLATION) THEN
                   jmatrix=jmatrix+1
@@ -1893,10 +1923,6 @@ CONTAINS
                   DO parameter_idx2=1,DEPENDENT_BASIS_TWO%NUMBER_OF_ELEMENT_PARAMETERS
                     PHIi=DEPENDENT_QUADRATURE_SCHEME_TWO%GAUSS_BASIS_FNS(parameter_idx2,NO_PART_DERIV,gauss_idx)
                     jmatrix = jmatrix+1
-                    IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
-                      DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
-                        & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
-                    ENDIF ! DAMPING_MATRIX
                     IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
                       STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
                         & STIFFNESS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
@@ -1911,6 +1937,14 @@ CONTAINS
                         & MASS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+ &
                         & RWG*DFPDX(parameter_idx,component_idx2)*SUM*PHIi/g_measured
                     ENDIF !Mass matrix
+                    IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
+                      !damping due to viscous damping term 
+                      !HARD CODING RAYLEIGH DAMPING - C = alphaM+betaK
+                      DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                        & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+ &
+                        & viscous_damping*RWG*DFPDX(parameter_idx,component_idx2)*SUM*PHIi/g_measured
+                    ENDIF ! DAMPING_MATRIX
+
                   ENDDO !parameter_idx2
                 ENDDO !displacement variable columns component_idx2
                 component_idx2 = HYDROSTATIC_PRESSURE_COMPONENT
@@ -1921,10 +1955,6 @@ CONTAINS
                 DO parameter_idx2=1,DEPENDENT_BASIS_TWO%NUMBER_OF_ELEMENT_PARAMETERS
                   PHIi=DEPENDENT_QUADRATURE_SCHEME_TWO%GAUSS_BASIS_FNS(parameter_idx2,NO_PART_DERIV,gauss_idx)
                   jmatrix = jmatrix+1
-                  IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
-                    DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
-                      & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
-                  ENDIF ! DAMPING_MATRIX
                   IF(STIFFNESS_MATRIX%UPDATE_MATRIX) THEN
                     DO idx_tensor=1,NUMBER_OF_DIMENSIONS
                       SUM=0.0_DP
@@ -1943,6 +1973,20 @@ CONTAINS
                     MASS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
                       & MASS_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+0.0_DP
                   ENDIF !Mass matrix
+                  IF(DAMPING_MATRIX%UPDATE_MATRIX) THEN
+                    DO idx_tensor=1,NUMBER_OF_DIMENSIONS
+                      SUM=0.0_DP
+                      DO idx2_tensor=1,NUMBER_OF_DIMENSIONS
+                        SUM = SUM+ &
+                          & DZDNU_INV(idx_tensor,idx2_tensor)*PERM_TENSOR_MOD(idx2_tensor,idx_tensor) &
+                          & *DFPDZ(parameter_idx2,idx2_tensor)
+                      ENDDO
+                        DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix) = &
+                          & DAMPING_MATRIX%ELEMENT_MATRIX%MATRIX(imatrix,jmatrix)+ &
+                          & rayleigh_beta*(RWG/RHOf_measured*g_measured)*Jznu &
+                          & *DFPDX(parameter_idx,idx_tensor)*SUM
+                    ENDDO
+                  ENDIF ! DAMPING_MATRIX
                 ENDDO !parameter_idx2
               ENDDO !parameter_idx
             ELSEIF(HYDROSTATIC_COMPONENT_INTERPOLATION_TYPE==FIELD_ELEMENT_BASED_INTERPOLATION) THEN
@@ -1959,38 +2003,6 @@ CONTAINS
       CALL FLAG_ERROR("Equations set is not associated.",ERR,ERROR,*999)
     ENDIF
 
-
-    IF(DIAGNOSTICS5) THEN
-      !Output element residual vector for first element
-      IF(ELEMENT_NUMBER == 1) THEN
-        NDOFS = 0
-        FIELD_VARIABLE=>DEPENDENT_FIELD%VARIABLES(var1) ! 'U' variable
-        DO mh=1,FIELD_VARIABLE%NUMBER_OF_COMPONENTS
-          SELECT CASE(FIELD_VARIABLE%COMPONENTS(mh)%INTERPOLATION_TYPE)
-          CASE(FIELD_NODE_BASED_INTERPOLATION)
-            MESH_COMPONENT_1 = FIELD_VARIABLE%COMPONENTS(mh)%MESH_COMPONENT_NUMBER
-            DEPENDENT_BASIS_1 => DEPENDENT_FIELD%DECOMPOSITION%DOMAIN(MESH_COMPONENT_1)%PTR% &
-              & TOPOLOGY%ELEMENTS%ELEMENTS(ELEMENT_NUMBER)%BASIS
-            NDOFS = NDOFS + DEPENDENT_BASIS_1%NUMBER_OF_ELEMENT_PARAMETERS
-            CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"EP: ",DEPENDENT_BASIS_1%NUMBER_OF_ELEMENT_PARAMETERS,ERR,ERROR,*999)
-          CASE(FIELD_ELEMENT_BASED_INTERPOLATION)
-            NDOFS = NDOFS + 1
-            CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"EP: ",1,ERR,ERROR,*999)
-          CASE DEFAULT
-            CALL FLAG_ERROR("Interpolation type " &
-              & //TRIM(NUMBER_TO_VSTRING(FIELD_VARIABLE%COMPONENTS(mh)%INTERPOLATION_TYPE,"*",ERR,ERROR))// &
-              & " is not valid for a finite elasticity equation.",ERR,ERROR,*999)
-          END SELECT
-        END DO
-        CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"NDOFS: ",NDOFS,ERR,ERROR,*999)
-        CALL WRITE_STRING(DIAGNOSTIC_OUTPUT_TYPE,"Element Vector for element number * (Fin.Elast.):",ERR,ERROR,*999)
-        CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"Element Vector for element number (Fin.Elast.): ", &
-          & ELEMENT_NUMBER,ERR,ERROR,*999)
-        CALL WRITE_STRING_VECTOR(DIAGNOSTIC_OUTPUT_TYPE,1,1,NDOFS,NDOFS,NDOFS,&
-          & NONLINEAR_MATRICES%ELEMENT_RESIDUAL%VECTOR(:), &
-          & '(4(X,E13.6))','4(4(X,E13.6))',ERR,ERROR,*999)
-      ENDIF
-    ENDIF
 
     CALL EXITS("COUPLED_ELASTICDARCY_FINITE_ELEMENT_RESIDUAL_EVALUATE")
     RETURN
@@ -2059,7 +2071,7 @@ CONTAINS
       & FIBRE_INTERPOLATED_POINT
     INTEGER(INTG), INTENT(IN) :: DIMEN  !<The number of dimensions
     INTEGER(INTG), INTENT(IN) :: NUMBER_OF_XI !<The number of xi directions
-    REAL(DP), INTENT(OUT) :: DZDNU(DIMEN,DIMEN) !<On return, DZDNU - Deformation Gradient Tensor,
+    REAL(DP), INTENT(OUT) :: DZDNU(3,3) !<On return, DZDNU - Deformation Gradient Tensor,
     REAL(DP), INTENT(OUT) :: Jxxi       !<On return, The Jacobian of the transformation from xi to x
     INTEGER(INTG), INTENT(OUT) :: ERR   !<The error code
     TYPE(VARYING_STRING), INTENT(OUT) :: ERROR !<The error string
@@ -2118,7 +2130,7 @@ CONTAINS
     IF (DIMEN == 2) THEN
         DZDNU(1,:) = (/DZDNU_TEMP(1,1),DZDNU_TEMP(1,2),0.0_DP/)
         DZDNU(2,:) = (/DZDNU_TEMP(2,1),DZDNU_TEMP(2,2),0.0_DP/)
-        DZDNU(3,:) = (/0.0_DP,0.0_DP,1.0_DP/)
+        DZDNU(3,:) = (/0.0_DP,0.0_DP,0.0_DP/)
     ELSE
         DZDNU = DZDNU_TEMP
     ENDIF
@@ -2151,13 +2163,13 @@ CONTAINS
   !>Evaluates the Total Kirchoff stress tensor at a given Gauss point
   SUBROUTINE COUPLED_ELASTICDARCY_GAUSS_SECOND_PIOLA_TENSOR(EQUATIONS_SET,DEPENDENT_INTERPOLATED_POINT, &
       & MATERIALS_INTERPOLATED_POINT,INDEPENDENT_INTERPOLATED_POINT, &
-      & SECOND_PIOLA_TENSOR,Jznu,DZDNU,DIMEN,ELEMENT_NUMBER,GAUSS_POINT_NUMBER,ERR,ERROR,*)
+      & SECOND_PIOLA_TENSOR_EFF,Jznu,DZDNU,DIMEN,ELEMENT_NUMBER,GAUSS_POINT_NUMBER,ERR,ERROR,*)
 
     !Argument variables
     TYPE(EQUATIONS_SET_TYPE), POINTER, INTENT(IN) :: EQUATIONS_SET !<A pointer to the equations set 
     TYPE(FIELD_INTERPOLATED_POINT_TYPE), POINTER :: DEPENDENT_INTERPOLATED_POINT,MATERIALS_INTERPOLATED_POINT
     TYPE(FIELD_INTERPOLATED_POINT_TYPE), POINTER :: INDEPENDENT_INTERPOLATED_POINT
-    REAL(DP), INTENT(OUT) :: SECOND_PIOLA_TENSOR(:,:)
+    REAL(DP), INTENT(OUT) :: SECOND_PIOLA_TENSOR_EFF(:,:)
     REAL(DP), INTENT(OUT) :: Jznu !Determinant of deformation gradient tensor (AZL)
     REAL(DP), INTENT(IN) :: DZDNU(DIMEN,DIMEN) !Deformation gradient tensor at the Guass point
     INTEGER(INTG), INTENT(IN) :: DIMEN  !<The number of dimensions
@@ -2167,7 +2179,7 @@ CONTAINS
     !Local Variables
     INTEGER(INTG) :: EQUATIONS_SET_SUBTYPE !<The equation subtype
     INTEGER(INTG) :: i,j,PRESSURE_COMPONENT,dof_idx
-    REAL(DP) :: AZL(DIMEN,DIMEN),AZU(DIMEN,DIMEN),DZDNUT(DIMEN,DIMEN),SECOND_PIOLA_TENSOR_EFF(DIMEN,DIMEN), &
+    REAL(DP) :: AZL(DIMEN,DIMEN),AZU(DIMEN,DIMEN),DZDNUT(DIMEN,DIMEN), &
       & E(DIMEN,DIMEN),P,IDENTITY(DIMEN,DIMEN),AZLT(DIMEN,DIMEN),AZUT(DIMEN,DIMEN)
     REAL(DP) :: I1,I2,I3,mu,lambda            !Invariants, if needed
     REAL(DP) :: ACTIVE_STRESS_11,ACTIVE_STRESS_22,ACTIVE_STRESS_33 !Active stress to be copied in from independent field.

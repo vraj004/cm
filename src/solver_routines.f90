@@ -5153,6 +5153,20 @@ CONTAINS
             SECOND_MEAN_PREDICTION_FACTOR=DYNAMIC_SOLVER%THETA(1)*DELTA_T
             FIRST_PREDICTION_FACTOR=1.0_DP
             SECOND_PREDICTION_FACTOR=DELTA_T
+            IF(DIAGNOSTICS1) THEN
+              CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE, &
+                & "  DELTA_T = ",DELTA_T,ERR,ERROR,*999)
+              CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE, &
+                & "  DYNAMIC SOLVER THETA 1 = ",DYNAMIC_SOLVER%THETA(1),ERR,ERROR,*999)
+              CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE, &
+                & "  FIRST MEAN PREDICTION FACTOR = ",FIRST_MEAN_PREDICTION_FACTOR,ERR,ERROR,*999)
+              CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE, &
+                & "  SECOND MEAN PREDICTION FACTOR = ",SECOND_MEAN_PREDICTION_FACTOR,ERR,ERROR,*999)
+              CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE, &
+                & "  FIRST PREDICTION FACTOR = ",FIRST_PREDICTION_FACTOR,ERR,ERROR,*999)
+              CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE, &
+                & "  SECOND PREDICTION FACTOR = ",SECOND_PREDICTION_FACTOR,ERR,ERROR,*999)
+            ENDIF
           CASE(SOLVER_DYNAMIC_THIRD_DEGREE)
             FIRST_MEAN_PREDICTION_FACTOR=1.0_DP
             SECOND_MEAN_PREDICTION_FACTOR=DYNAMIC_SOLVER%THETA(1)*DELTA_T
@@ -5195,9 +5209,15 @@ CONTAINS
                               !that the current dependent field values are not equal to the current previous values that were set
                               !at the beginning of the control loop. 
                               !Copy the current field values to the previous values
+                              IF(DIAGNOSTICS1) THEN
+                                CALL WRITE_STRING(DIAGNOSTIC_OUTPUT_TYPE,"COPY TO PREV_VAL",ERR,ERROR,*999)
+                              ENDIF
                               CALL FIELD_PARAMETER_SETS_COPY(DEPENDENT_FIELD,DYNAMIC_VARIABLE_TYPE,FIELD_VALUES_SET_TYPE, &
                                 & FIELD_PREVIOUS_VALUES_SET_TYPE,1.0_DP,ERR,ERROR,*999)
                               IF(DYNAMIC_SOLVER%LINEARITY==SOLVER_DYNAMIC_NONLINEAR) THEN
+                                IF(DIAGNOSTICS1) THEN
+                                  CALL WRITE_STRING(DIAGNOSTIC_OUTPUT_TYPE,"COPY TO PREV_RESID",ERR,ERROR,*999)
+                                ENDIF
                                 CALL FIELD_PARAMETER_SETS_COPY(DEPENDENT_FIELD,DYNAMIC_VARIABLE_TYPE, &
                                   & FIELD_RESIDUAL_SET_TYPE,FIELD_PREVIOUS_RESIDUAL_SET_TYPE,1.0_DP, &
                                   & ERR,ERROR,*999)
@@ -5217,19 +5237,28 @@ CONTAINS
                                 ENDIF
                               CASE(SOLVER_DYNAMIC_SECOND_DEGREE)
                                 !The mean predicted displacement comes from the previous displacement and the previous velocity
+                                IF(DIAGNOSTICS1) THEN
+                                  CALL WRITE_STRING(DIAGNOSTIC_OUTPUT_TYPE,"CALCULATING MEAN PREDICTED DISP",ERR,ERROR,*999)
+                                ENDIF
                                 CALL FIELD_PARAMETER_SETS_ADD(DEPENDENT_FIELD,DYNAMIC_VARIABLE_TYPE, &
                                   & [FIRST_MEAN_PREDICTION_FACTOR,SECOND_MEAN_PREDICTION_FACTOR], &
                                   & [FIELD_PREVIOUS_VALUES_SET_TYPE,FIELD_PREVIOUS_VELOCITY_SET_TYPE], &
-                                  & FIELD_MEAN_PREDICTED_DISPLACEMENT_SET_TYPE,ERR,ERROR,*999)
+                                  & FIELD_MEAN_PREDICTED_DISPLACEMENT_SET_TYPE,FIELD_ADD_UPDATE_TYPE,ERR,ERROR,*999)
                                 !The mean predicted velocity is the current velocity
+                                IF(DIAGNOSTICS1) THEN
+                                  CALL WRITE_STRING(DIAGNOSTIC_OUTPUT_TYPE,"CALCULATING MEAN PREDICTED VEL",ERR,ERROR,*999)
+                                ENDIF
                                 CALL FIELD_PARAMETER_SETS_COPY(DEPENDENT_FIELD,DYNAMIC_VARIABLE_TYPE, &
                                   & FIELD_PREVIOUS_VELOCITY_SET_TYPE,FIELD_MEAN_PREDICTED_VELOCITY_SET_TYPE,1.0_DP,ERR,ERROR,*999)
                                 IF(DYNAMIC_SOLVER%LINEARITY==SOLVER_DYNAMIC_NONLINEAR) THEN
                                   !The predicted displacement comes from the previous displacement and the previous velocity
+                                  IF(DIAGNOSTICS1) THEN
+                                    CALL WRITE_STRING(DIAGNOSTIC_OUTPUT_TYPE,"CALCULATING PREDICTED DISP",ERR,ERROR,*999)
+                                  ENDIF
                                   CALL FIELD_PARAMETER_SETS_ADD(DEPENDENT_FIELD,DYNAMIC_VARIABLE_TYPE, &
                                     & [FIRST_PREDICTION_FACTOR,SECOND_PREDICTION_FACTOR], &
                                     & [FIELD_PREVIOUS_VALUES_SET_TYPE,FIELD_PREVIOUS_VELOCITY_SET_TYPE], &
-                                    & FIELD_PREDICTED_DISPLACEMENT_SET_TYPE,ERR,ERROR,*999)
+                                    & FIELD_PREDICTED_DISPLACEMENT_SET_TYPE,FIELD_ADD_UPDATE_TYPE,ERR,ERROR,*999)
                                 END IF
                               CASE(SOLVER_DYNAMIC_THIRD_DEGREE)
                                 !The mean predicted displacement comes from the previous displacement and the previous
@@ -5238,12 +5267,12 @@ CONTAINS
                                   & [FIRST_MEAN_PREDICTION_FACTOR,SECOND_MEAN_PREDICTION_FACTOR, &
                                   & THIRD_MEAN_PREDICTION_FACTOR],[FIELD_PREVIOUS_VALUES_SET_TYPE, &
                                   & FIELD_PREVIOUS_VELOCITY_SET_TYPE,FIELD_PREVIOUS_ACCELERATION_SET_TYPE], &
-                                  & FIELD_MEAN_PREDICTED_DISPLACEMENT_SET_TYPE,ERR,ERROR,*999)
+                                  & FIELD_MEAN_PREDICTED_DISPLACEMENT_SET_TYPE,FIELD_ADD_TO_TYPE,ERR,ERROR,*999)
                                 !The mean predicted velocity comes from the previous velocity and acceleration
                                 CALL FIELD_PARAMETER_SETS_ADD(DEPENDENT_FIELD,DYNAMIC_VARIABLE_TYPE, &
                                   & [FIRST_MEAN_PREDICTION_FACTOR,SECOND_MEAN_PREDICTION_FACTOR], &
                                   & [FIELD_PREVIOUS_VELOCITY_SET_TYPE,FIELD_PREVIOUS_ACCELERATION_SET_TYPE], &
-                                  & FIELD_MEAN_PREDICTED_VELOCITY_SET_TYPE,ERR,ERROR,*999)
+                                  & FIELD_MEAN_PREDICTED_VELOCITY_SET_TYPE,FIELD_ADD_TO_TYPE,ERR,ERROR,*999)
                                 !The mean predicted acceleration is the current acceleration
                                 CALL FIELD_PARAMETER_SETS_COPY(DEPENDENT_FIELD,DYNAMIC_VARIABLE_TYPE, &
                                   & FIELD_PREVIOUS_ACCELERATION_SET_TYPE,FIELD_MEAN_PREDICTED_ACCELERATION_SET_TYPE,1.0_DP, &
@@ -5255,7 +5284,7 @@ CONTAINS
                                     & [FIRST_PREDICTION_FACTOR,SECOND_PREDICTION_FACTOR, &
                                     & THIRD_PREDICTION_FACTOR],[FIELD_PREVIOUS_VALUES_SET_TYPE, &
                                     & FIELD_PREVIOUS_VELOCITY_SET_TYPE,FIELD_PREVIOUS_ACCELERATION_SET_TYPE], &
-                                    & FIELD_PREDICTED_DISPLACEMENT_SET_TYPE,ERR,ERROR,*999)
+                                    & FIELD_PREDICTED_DISPLACEMENT_SET_TYPE,FIELD_ADD_TO_TYPE,ERR,ERROR,*999)
                                 END IF
                               CASE DEFAULT
                                 LOCAL_ERROR="The dynamic solver degree of "// &
@@ -12182,13 +12211,15 @@ CONTAINS
                                 !Do nothing. Increment will be added after the solve.
                               CASE(SOLVER_DYNAMIC_SECOND_DEGREE)
                                 CALL FIELD_PARAMETER_SETS_ADD(DEPENDENT_FIELD,DYNAMIC_VARIABLE_TYPE,FIRST_UPDATE_FACTOR, &
-                                  & FIELD_PREVIOUS_VELOCITY_SET_TYPE,FIELD_VALUES_SET_TYPE,ERR,ERROR,*999)
+                                  & FIELD_PREVIOUS_VELOCITY_SET_TYPE,FIELD_VALUES_SET_TYPE, &
+                                  & FIELD_ADD_TO_TYPE,ERR,ERROR,*999)
                               CASE(SOLVER_DYNAMIC_THIRD_DEGREE)
                                 CALL FIELD_PARAMETER_SETS_ADD(DEPENDENT_FIELD,DYNAMIC_VARIABLE_TYPE,[FIRST_UPDATE_FACTOR, &
                                   & SECOND_UPDATE_FACTOR],[FIELD_PREVIOUS_VELOCITY_SET_TYPE,FIELD_PREVIOUS_VALUES_SET_TYPE], &
-                                  & FIELD_VALUES_SET_TYPE,ERR,ERROR,*999)
+                                  & FIELD_VALUES_SET_TYPE,FIELD_ADD_TO_TYPE,ERR,ERROR,*999)
                                 CALL FIELD_PARAMETER_SETS_ADD(DEPENDENT_FIELD,DYNAMIC_VARIABLE_TYPE,FIRST_UPDATE_FACTOR, &
-                                  & FIELD_PREVIOUS_ACCELERATION_SET_TYPE,FIELD_VELOCITY_VALUES_SET_TYPE,ERR,ERROR,*999)
+                                  & FIELD_PREVIOUS_ACCELERATION_SET_TYPE,FIELD_VELOCITY_VALUES_SET_TYPE, &
+                                  & FIELD_ADD_TO_TYPE,ERR,ERROR,*999)
                               CASE DEFAULT
                                 LOCAL_ERROR="The dynamic solver degree of "// &
                                   & TRIM(NUMBER_TO_VSTRING(DYNAMIC_SOLVER%DEGREE,"*",ERR,ERROR))//" is invalid."
@@ -17287,6 +17318,16 @@ CONTAINS
                                       & FIELD_VALUES_SET_TYPE,variable_dof,DISPLACEMENT_VALUE,ERR,ERROR,*999)
                                     CALL FIELD_PARAMETER_SET_UPDATE_LOCAL_DOF(DEPENDENT_FIELD,DYNAMIC_VARIABLE_TYPE, &
                                       & FIELD_VELOCITY_VALUES_SET_TYPE,variable_dof,VELOCITY_VALUE,ERR,ERROR,*999)
+                                    IF(DIAGNOSTICS1) THEN
+                                      CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  variable_dof = ", &
+                                        & variable_dof,ERR,ERROR,*999)
+                                      CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  SOLV_VAL = ", &
+                                        & SOLVER_VALUE,ERR,ERROR,*999)
+                                      CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  DISP_VAL = ", &
+                                        & DISPLACEMENT_VALUE,ERR,ERROR,*999)
+                                      CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  VEL_VAL = ", &
+                                        & VELOCITY_VALUE,ERR,ERROR,*999)
+                                    ENDIF
                                   CASE(SOLVER_DYNAMIC_THIRD_DEGREE)
                                     !If we are nonlinear then use the previously calculated predicted displacement
                                     IF(DYNAMIC_SOLVER%LINEARITY==SOLVER_DYNAMIC_NONLINEAR) THEN
@@ -17746,6 +17787,7 @@ CONTAINS
                 CASE(SOLVER_DYNAMIC_SECOND_DEGREE)
                   DYNAMIC_ALPHA_FACTOR=DELTA_T*DELTA_T/2.0_DP
                   DYNAMIC_U_FACTOR=1.0_DP
+
                 CASE(SOLVER_DYNAMIC_THIRD_DEGREE)
                   DYNAMIC_ALPHA_FACTOR=DELTA_T*DELTA_T*DELTA_T/6.0_DP
                   DYNAMIC_U_FACTOR=1.0_DP
@@ -17807,6 +17849,14 @@ CONTAINS
                                       ALPHA_VALUE=SOLVER_DATA(solver_dof_idx)
                                       CALL FIELD_PARAMETER_SET_UPDATE_LOCAL_DOF(DEPENDENT_FIELD,VARIABLE_TYPE, &
                                         & FIELD_INCREMENTAL_VALUES_SET_TYPE,variable_dof,ALPHA_VALUE,ERR,ERROR,*999)
+                                      IF(DIAGNOSTICS1) THEN
+                                        CALL WRITE_STRING(DIAGNOSTIC_OUTPUT_TYPE, &
+                                          & "Setting Increment Values in Dep Field",ERR,ERROR,*999)
+                                        CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  variable_dof = ", &
+                                          & variable_dof,ERR,ERROR,*999)
+                                        CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  ALPHA_VAL = ", &
+                                          & ALPHA_VALUE,ERR,ERROR,*999)
+                                      ENDIF           
                                        !Get the predicted displacement data       
                                       CALL FIELD_PARAMETER_SET_GET_LOCAL_DOF(DEPENDENT_FIELD,DYNAMIC_VARIABLE_TYPE, &
                                         & FIELD_PREDICTED_DISPLACEMENT_SET_TYPE,variable_dof,PREDICTED_DISPLACEMENT, &
@@ -17820,6 +17870,18 @@ CONTAINS
                                       VALUE=VALUE*DYNAMIC_ALPHA_FACTOR+PREDICTED_DISPLACEMENT
                                       CALL FIELD_PARAMETER_SET_UPDATE_LOCAL_DOF(DEPENDENT_FIELD,VARIABLE_TYPE, &
                                         & FIELD_VALUES_SET_TYPE,variable_dof,VALUE,ERR,ERROR,*999)
+                                      IF(DIAGNOSTICS1) THEN
+                                        CALL WRITE_STRING(DIAGNOSTIC_OUTPUT_TYPE, &
+                                          & "Setting field values in dep field ",ERR,ERROR,*999)
+                                        CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  variable_dof = ", &
+                                          & variable_dof,ERR,ERROR,*999)
+                                        CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  PRED_DISP = ", &
+                                          & PREDICTED_DISPLACEMENT,ERR,ERROR,*999)
+                                        CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  DYN_ALPHA_FACTOR = ", &
+                                          & DYNAMIC_ALPHA_FACTOR,ERR,ERROR,*999)
+                                        CALL WRITE_STRING_VALUE(DIAGNOSTIC_OUTPUT_TYPE,"  VALUE = ", &
+                                          & VALUE,ERR,ERROR,*999)
+                                      ENDIF           
                                     ELSE
                                       CALL FLAG_ERROR("Dynamic mapping is not associated.",ERR,ERROR,*999)
                                     ENDIF
